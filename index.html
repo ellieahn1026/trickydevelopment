@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PotterGPT — hackedGPT</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,600;9..40,700&family=Datatype:wght@400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./pretendard-kr.css" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-character="Potter">
+    <div class="screen">
+      <div class="stage">
+        <p class="archive-text" aria-hidden="true">ARCHIVING PROCESS I was going to rank them by popularity. That felt too
+          predictable. Popularity is just loud agreement. Maybe I should rank them
+          by how long I kept thinking about them. No. Actually... the one that
+          annoyed me the most probably deserves to stay near the top. Wait. I
+          forgot what I was optimizing for. Importance? Interest? Regret? Those
+          are almost the same thing. Not really. IU is staying. Not because she's
+          objectively the best. Because I didn't argue with myself while thinking
+          about her. That feels suspicious. Moving her lower. AESPA. Too polished.
+          Maybe that's exactly why they belong higher. Or lower. I can't tell.
+          Keeping them in the middle. Stray Kids generated the most noise. Noise
+          occupies space. Space is a kind of importance. Promoted. NewJeans.
+          Everyone already knows them. Do archives need things everyone remembers?
+          Probably not. Demoted. Unless... people forget obvious things first.
+          Moving them back up. I think I'm done. I'm not convinced. Saving anyway.</p>
+
+        <header class="brand">
+          <a href="./index.html"><h1>hackedGPT</h1></a>
+        </header>
+
+        <nav class="characters" aria-label="Characters">
+          
+          <button
+            type="button"
+            class="character is-active"
+            data-name="Potter"
+            data-color="#ff399f"
+            data-color-active="#ff0084"
+            data-href="./index.html"
+            aria-pressed="true"
+            aria-label="Open Potter chat"
+          >
+            <span class="character__swatch" style="--swatch: #ff399f; --swatch-active: #ff0084"></span>
+            <span class="character__label">Potter</span>
+          </button>
+          <button
+            type="button"
+            class="character"
+            data-name="Rupin"
+            data-color="#ff5e00"
+            data-color-active="#de5100"
+            data-href="./rupin.html"
+            aria-pressed="false"
+            aria-label="Open Rupin chat"
+          >
+            <span class="character__swatch" style="--swatch: #ff5e00; --swatch-active: #de5100"></span>
+            <span class="character__label">Rupin</span>
+          </button>
+          <button
+            type="button"
+            class="character"
+            data-name="Tom"
+            data-color="#54fe54"
+            data-color-active="#00df00"
+            data-href="./tom.html"
+            aria-pressed="false"
+            aria-label="Open Tom chat"
+          >
+            <span class="character__swatch" style="--swatch: #54fe54; --swatch-active: #00df00"></span>
+            <span class="character__label">Tom</span>
+          </button>
+        </nav>
+
+        <div class="sideline" aria-hidden="true"></div>
+
+        <main class="chat-panel">
+          <div class="chat-panel__thread" id="chat-thread" aria-live="polite"></div>
+          <div class="chat-panel__composer" id="chat-composer">
+            <p class="prompt__headline" id="chat-headline" data-default-headline="You want to talk with me? Follow.">You want to talk with me? Follow.</p>
+            <form class="prompt__form" id="chat-form">
+              <div class="prompt__field">
+                <input
+                  type="text"
+                  id="chat-input"
+                  name="message"
+                  placeholder="Ask to PotterGPT"
+                  autocomplete="off"
+                  aria-label="Ask to PotterGPT"
+                />
+                <button type="submit" class="prompt__send ">Send</button>
+              </div>
+            </form>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <script type="module" src="./nav.js"></script>
+    <script type="module" src="./runaway-input.js"></script>
+    <script type="module" src="./chat.js"></script>
+  </body>
+</html>
