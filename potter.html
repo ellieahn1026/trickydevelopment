@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TomGPT — hackedGPT</title>
+    <title>PotterGPT — hackedGPT</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="./pretendard-kr.css" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body data-character="Tom">
+  <body data-character="Potter">
     <div class="screen">
       <div class="stage">
         <p class="archive-text" aria-hidden="true"></p>
@@ -27,12 +27,12 @@
           
           <button
             type="button"
-            class="character"
+            class="character is-active"
             data-name="Potter"
             data-color="#ff399f"
             data-color-active="#ff0015"
             data-href="./index.html"
-            aria-pressed="false"
+            aria-pressed="true"
             aria-label="Open Potter chat"
           >
             <span class="character__swatch" style="--swatch: #ff399f; --swatch-active: #ff0015"></span>
@@ -53,12 +53,12 @@
           </button>
           <button
             type="button"
-            class="character is-active"
+            class="character"
             data-name="Tom"
             data-color="#54fe54"
             data-color-active="#00ffe1"
             data-href="./tom.html"
-            aria-pressed="true"
+            aria-pressed="false"
             aria-label="Open Tom chat"
           >
             <span class="character__swatch" style="--swatch: #54fe54; --swatch-active: #00ffe1"></span>
@@ -71,16 +71,16 @@
         <main class="chat-panel">
           <div class="chat-panel__thread" id="chat-thread" aria-live="polite"></div>
           <div class="chat-panel__composer" id="chat-composer">
-            <p class="prompt__headline" id="chat-headline" data-default-headline="Honestly, I'm not interested.">Honestly, I'm not interested.</p>
+            <p class="prompt__headline" id="chat-headline" data-default-headline="You want to talk with me? Follow.">You want to talk with me? Follow.</p>
             <form class="prompt__form" id="chat-form">
               <div class="prompt__field">
                 <input
                   type="text"
                   id="chat-input"
                   name="message"
-                  placeholder="Ask to TomGPT"
+                  placeholder="Ask to PotterGPT"
                   autocomplete="off"
-                  aria-label="Ask to TomGPT"
+                  aria-label="Ask to PotterGPT"
                 />
                 <button type="submit" class="prompt__send ">Send</button>
               </div>

@@ -1,5 +1,6 @@
 import { DEFAULT_HEADLINE } from "./headline-type.js";
 import { appendRandomArchiveEntry } from "./archive-type.js";
+import { getTomHeadline } from "./tom-mood.js";
 
 const character = document.body.dataset.character || "Potter";
 const thread = document.getElementById("chat-thread");
@@ -36,13 +37,9 @@ const replies = {
   Tom: [
     {
       text: "Logged. Don't expect comfort. Expect a useful contradiction.",
-      reviseFrom: "useful contradiction",
-      reviseTo: "carefully weaponized doubt",
     },
     {
       text: "Noted. The answer exists. Whether you like it is optional.",
-      reviseFrom: "Whether you like it is optional",
-      reviseTo: "Your approval was never part of the plan",
     },
   ],
 };
@@ -82,13 +79,36 @@ function dockComposer() {
 
   document.body.classList.add("chat-started", "composer-locked");
   composer?.classList.add("is-locked");
-  composer?.classList.remove("chat-panel__composer--runaway");
+
+  // Potter: keep the catch position where cursor met the composer
+  const keepCatchPosition = character === "Potter";
+
+  if (keepCatchPosition) {
+    if (composer) {
+      const catchX = composer.dataset.catchX;
+      const catchY = composer.dataset.catchY;
+      if (catchX != null && catchY != null) {
+        composer.style.setProperty("--catch-x", `${catchX}px`);
+        composer.style.setProperty("--catch-y", `${catchY}px`);
+        composer.style.left = `${catchX}px`;
+        composer.style.top = `${catchY}px`;
+      }
+      composer.classList.add("is-catch-locked", "chat-panel__composer--runaway");
+    }
+    if (input) input.disabled = false;
+    return;
+  }
+
+  // Rupin/Tom: dock to bottom center after first send
+  composer?.classList.remove("chat-panel__composer--runaway", "is-catch-locked");
 
   if (composer) {
     composer.style.left = "";
     composer.style.top = "";
     composer.style.width = "";
     composer.style.maxWidth = "";
+    composer.style.removeProperty("--catch-x");
+    composer.style.removeProperty("--catch-y");
   }
 
   if (input) input.disabled = false;
@@ -305,23 +325,29 @@ form.addEventListener("submit", (event) => {
   appendQuestion(message);
   input.value = "";
   headline.classList.remove("is-wave", "is-typing");
-  headline.textContent = thinkingHeadlines[character] || "Thinking...";
+  headline.textContent =
+    character === "Tom"
+      ? getTomHeadline()
+      : thinkingHeadlines[character] || "Thinking...";
 
   const pool = replies[character] || replies.Potter;
   const answer = pool[replyIndex % pool.length];
   replyIndex += 1;
 
   window.setTimeout(async () => {
-    // User challenged a prior answer → redact / rewrite that earlier reply first
-    if (isPushback) {
+    // Potter/Rupin: on pushback, erase or rewrite the prior answer.
+    // Tom: answers stay as-is — no censor / erase.
+    if (isPushback && character !== "Tom") {
       await revisePreviousAnswerOnPushback();
     }
 
-    // Always show the new answer in full first
     await appendAnswer(answer);
     appendRandomArchiveEntry();
     headline.classList.remove("is-wave", "is-typing");
-    headline.textContent = dockedHeadlines[character] || DEFAULT_HEADLINE;
+    headline.textContent =
+      character === "Tom"
+        ? getTomHeadline()
+        : dockedHeadlines[character] || DEFAULT_HEADLINE;
     scrollThreadToLatest();
     input.focus();
   }, 450);

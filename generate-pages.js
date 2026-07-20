@@ -3,15 +3,16 @@ import { writeFileSync } from "node:fs";
 
 const DEFAULT_HEADLINE = "You want to talk with me? Follow.";
 
-writeFileSync(
-  "index.html",
-  chatPage({
-    activeName: "Potter",
-    title: "PotterGPT — hackedGPT",
-    headline: DEFAULT_HEADLINE,
-    placeholder: "Ask to PotterGPT",
-  }),
-);
+const potterPage = chatPage({
+  activeName: "Potter",
+  title: "PotterGPT — hackedGPT",
+  headline: DEFAULT_HEADLINE,
+  placeholder: "Ask to PotterGPT",
+});
+
+// Potter chat UI lives at index.html (Bun default entry) and potter.html
+writeFileSync("index.html", potterPage);
+writeFileSync("potter.html", potterPage);
 
 writeFileSync(
   "rupin.html",
@@ -28,11 +29,9 @@ writeFileSync(
   chatPage({
     activeName: "Tom",
     title: "TomGPT — hackedGPT",
-    headline: DEFAULT_HEADLINE,
+    headline: "Honestly, I'm not interested.",
     placeholder: "Ask to TomGPT",
-    sendLabel: "Block!",
-    sendClass: "prompt__send--block",
   }),
 );
 
-console.log("Generated index.html, rupin.html, tom.html");
+console.log("Generated index.html, potter.html, rupin.html, tom.html");

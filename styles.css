@@ -550,13 +550,15 @@ body {
   pointer-events: auto;
 }
 
-/* Rupin first screen: centered in the sideline → viewport lane */
-body[data-character="Rupin"] .chat-panel {
+/* Rupin/Tom first screen: centered in the sideline → viewport lane */
+body[data-character="Rupin"] .chat-panel,
+body[data-character="Tom"] .chat-panel {
   animation: none;
   transform: none;
 }
 
-body[data-character="Rupin"] .chat-panel__composer {
+body[data-character="Rupin"] .chat-panel__composer,
+body[data-character="Tom"] .chat-panel__composer {
   position: fixed;
   top: 50%;
   /* midpoint between fixed sideline x:365 and viewport right */
@@ -574,30 +576,38 @@ body[data-character="Rupin"] .chat-panel__composer {
   transform: translate(-50%, -50%);
 }
 
-body[data-character="Rupin"] .prompt__field {
+body[data-character="Rupin"] .prompt__field,
+body[data-character="Tom"] .prompt__field {
   min-height: 78px;
   padding: 9px 8px 9px 20px;
 }
 
 body[data-character="Rupin"] .prompt__field input,
-body[data-character="Rupin"] .prompt__send {
+body[data-character="Rupin"] .prompt__send,
+body[data-character="Tom"] .prompt__field input,
+body[data-character="Tom"] .prompt__send {
   font-size: 18px;
 }
 
-body[data-character="Rupin"] .prompt__send {
+body[data-character="Rupin"] .prompt__send,
+body[data-character="Tom"] .prompt__send {
   height: 61px;
   min-height: 61px;
 }
 
-/* Figma 대화중: composer docks bottom after first send */
+/* Figma 대화중 bottom dock — Rupin/Tom after first send.
+   Potter keeps the catch-lock cursor position instead. */
 body.chat-started .chat-panel {
   animation: none;
   transform: none;
 }
 
-body.chat-started .chat-panel__composer,
-body.chat-started .chat-panel__composer--runaway,
-body.chat-started .chat-panel__composer--runaway.is-locked {
+body.chat-started[data-character="Rupin"] .chat-panel__composer,
+body.chat-started[data-character="Rupin"] .chat-panel__composer--runaway,
+body.chat-started[data-character="Rupin"] .chat-panel__composer--runaway.is-locked,
+body.chat-started[data-character="Tom"] .chat-panel__composer,
+body.chat-started[data-character="Tom"] .chat-panel__composer--runaway,
+body.chat-started[data-character="Tom"] .chat-panel__composer--runaway.is-locked {
   position: fixed !important;
   top: auto !important;
   bottom: var(--composer-bottom);
@@ -614,6 +624,28 @@ body.chat-started .chat-panel__composer--runaway.is-locked {
   max-width: var(--composer-w) !important;
   margin: 0 !important;
   transform: translateX(-50%) !important;
+  overflow: visible;
+  pointer-events: auto !important;
+  will-change: auto;
+  transition: none;
+}
+
+/* Potter: never create a transform containing block for fixed composer */
+body[data-character="Potter"] .chat-panel {
+  animation: none;
+  transform: none;
+}
+
+/* Freeze catch coordinates (set as --catch-x / --catch-y in JS) */
+.chat-panel__composer--runaway.is-catch-locked {
+  position: fixed !important;
+  left: var(--catch-x) !important;
+  top: var(--catch-y) !important;
+  right: auto !important;
+  bottom: auto !important;
+  z-index: 10;
+  margin: 0 !important;
+  transform: none !important;
   overflow: visible;
   pointer-events: auto !important;
   will-change: auto;
@@ -804,5 +836,111 @@ body.composer-locked .chat-panel__composer--runaway button {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* —— Tom mood states —— */
+body[data-character="Tom"] .prompt__headline {
+  white-space: normal;
+  max-width: 100%;
+}
+
+body[data-character="Tom"] .chat-panel__composer {
+  overflow: visible;
+}
+
+body[data-character="Tom"] .prompt__field {
+  transform-origin: center center;
+  will-change: transform;
+}
+
+/* happy: dance-y left/right tick */
+body[data-tom-mood="happy"] .prompt__field {
+  animation: tom-happy-dance 0.55s ease-in-out infinite;
+}
+
+@keyframes tom-happy-dance {
+  0%,
+  100% {
+    transform: rotate(0deg) translateX(0);
+  }
+  20% {
+    transform: rotate(-5deg) translateX(-8px);
+  }
+  40% {
+    transform: rotate(5deg) translateX(8px);
+  }
+  60% {
+    transform: rotate(-4deg) translateX(-6px);
+  }
+  80% {
+    transform: rotate(4deg) translateX(6px);
+  }
+}
+
+/* sad: field + button + text stretch left/right together */
+body[data-tom-mood="sad"] .prompt__field {
+  animation: tom-sad-stretch 2.4s ease-in-out infinite;
+}
+
+body[data-tom-mood="sad"] .prompt__field input,
+body[data-tom-mood="sad"] .prompt__send {
+  transform-origin: center center;
+}
+
+@keyframes tom-sad-stretch {
+  0%,
+  100% {
+    transform: scaleX(1);
+  }
+  30% {
+    transform: scaleX(1.14);
+    transform-origin: left center;
+  }
+  50% {
+    transform: scaleX(1);
+  }
+  80% {
+    transform: scaleX(1.14);
+    transform-origin: right center;
+  }
+}
+
+/* tired: nodding-off dip — head drops, then snaps back */
+body[data-tom-mood="tired"] .prompt__field {
+  animation: tom-tired-nod 2.8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+
+@keyframes tom-tired-nod {
+  0%,
+  12% {
+    transform: translateY(0) rotate(0deg);
+  }
+  38% {
+    transform: translateY(42px) rotate(4deg);
+  }
+  52% {
+    transform: translateY(46px) rotate(5deg);
+  }
+  68% {
+    transform: translateY(0) rotate(0deg);
+  }
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+}
+
+/* idle: soft breathe */
+body[data-tom-mood="idle"] .prompt__field {
+  animation: tom-idle-breathe 3.2s ease-in-out infinite;
+}
+
+@keyframes tom-idle-breathe {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(4px);
   }
 }

@@ -435,8 +435,20 @@ if (!composer || !input) {
     window.cancelAnimationFrame(rafId);
     velX = 0;
     velY = 0;
+    // Freeze at the meeting point with the cursor
     placeAtCursor();
     enforceVisible();
+
+    const catchX = posX;
+    const catchY = posY;
+    composer.style.setProperty("--catch-x", `${catchX}px`);
+    composer.style.setProperty("--catch-y", `${catchY}px`);
+    composer.style.left = `${catchX}px`;
+    composer.style.top = `${catchY}px`;
+    composer.dataset.catchX = String(catchX);
+    composer.dataset.catchY = String(catchY);
+    composer.classList.add("is-locked", "is-catch-locked");
+
     sendButton?.classList.remove("is-cursor-hit");
     if (sendButton) {
       sendButton.style.backgroundColor = "#000000";
@@ -445,7 +457,6 @@ if (!composer || !input) {
     sendHitActive = false;
     cursorTouching = false;
     typeLockHeadline(headline);
-    composer.classList.add("is-locked");
     document.body.classList.add("composer-locked");
     input.disabled = false;
     input.focus();
@@ -456,7 +467,7 @@ if (!composer || !input) {
   }
 
   function bindRunaway() {
-    if (document.body.dataset.character === "Rupin") {
+    if (document.body.dataset.character === "Rupin" || document.body.dataset.character === "Tom") {
       return;
     }
 
@@ -498,8 +509,9 @@ if (!composer || !input) {
     });
 
     window.addEventListener("resize", () => {
-      if (document.body.classList.contains("chat-started")) return;
-      if (locked) {
+      if (locked || document.body.classList.contains("chat-started")) {
+        // Keep catch lock; only clamp if somehow off-screen without moving to top
+        if (composer.classList.contains("is-catch-locked")) return;
         enforceVisible();
         return;
       }
@@ -508,8 +520,8 @@ if (!composer || !input) {
     });
 
     window.visualViewport?.addEventListener("resize", () => {
-      if (document.body.classList.contains("chat-started")) return;
-      if (locked) {
+      if (locked || document.body.classList.contains("chat-started")) {
+        if (composer.classList.contains("is-catch-locked")) return;
         enforceVisible();
         return;
       }
