@@ -30,6 +30,10 @@
   /* Q/A max width = half of (sideline → viewport right) */
   --chat-bubble-max-w: calc((100vw - var(--sideline-left)) / 2);
   --content-left: var(--archive-left);
+  /* Figma 대화중: input w:1000, bottom ≈59, centered in sideline→right */
+  --composer-w: 1000px;
+  --composer-bottom: 59px;
+  --composer-dock-h: 137px;
 
   --character-color: #ff399f;
 }
@@ -156,14 +160,10 @@ body {
   cursor: pointer;
   color: inherit;
   font: inherit;
-  transition: transform 0.25s ease;
-}
-
-.character:hover {
-  transform: translateY(-2px);
 }
 
 .character__swatch {
+  position: relative;
   display: block;
   width: var(--btn-size);
   height: var(--btn-size);
@@ -172,6 +172,23 @@ body {
   flex-shrink: 0;
   background: var(--swatch);
   transition: background-color 0.2s ease;
+}
+
+.character__swatch::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 2px solid transparent;
+  pointer-events: none;
+}
+
+.character:hover .character__swatch::after,
+.character:focus-visible .character__swatch::after {
+  border-color: var(--white);
+}
+
+.character:focus-visible {
+  outline: none;
 }
 
 .character.is-active .character__swatch {
@@ -208,9 +225,15 @@ body {
   font-weight: 400;
   line-height: 1.3;
   letter-spacing: -0.0132rem;
+  white-space: pre-wrap;
   color: rgba(255, 255, 255, 0.4);
   pointer-events: none;
   animation: fade-in 1.2s ease both;
+}
+
+.archive-text.is-typing::after {
+  content: "|";
+  animation: headline-caret 0.75s step-end infinite;
 }
 
 .prompt {
@@ -410,6 +433,101 @@ body {
   animation: chat-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Figma: black cover + blue "not sure......" while AI revises */
+.chat-censor {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: text-bottom;
+  box-sizing: border-box;
+  min-width: 237px;
+  height: 1.45em;
+  margin: 0 0.15em;
+  padding: 0 16px;
+  background: #000000;
+  white-space: nowrap;
+  transition: opacity 0.2s ease, transform 0.2s ease, min-width 0.2s ease;
+}
+
+.chat-censor__label {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.3;
+  color: var(--bg);
+}
+
+.chat-censor.is-revising {
+  opacity: 0;
+  transform: scaleX(0.92);
+  min-width: 120px;
+}
+
+.chat-answer.is-doubting {
+  opacity: 0.92;
+}
+
+.chat-answer.is-erasing {
+  opacity: 0.96;
+}
+
+.chat-answer__revised {
+  color: #ffffff;
+}
+
+/* Eraser wipe — characters scrub away left → right */
+.chat-erase {
+  display: inline;
+  white-space: pre-wrap;
+}
+
+.chat-erase__char {
+  display: inline-block;
+  will-change: opacity, filter, transform, color;
+}
+
+.chat-erase.is-wiping .chat-erase__char {
+  animation: erase-stroke 0.42s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation-delay: calc(var(--i) * 28ms);
+}
+
+@keyframes erase-stroke {
+  0% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) skewX(0deg);
+    color: #ffffff;
+  }
+  45% {
+    opacity: 0.55;
+    filter: blur(0.6px);
+    transform: translateY(1px) skewX(-6deg);
+    color: rgba(255, 255, 255, 0.35);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(1.4px);
+    transform: translateY(2px) skewX(-10deg);
+    color: transparent;
+  }
+}
+
+.chat-erase-gap {
+  display: inline-block;
+  height: 0.2em;
+  margin: 0 0.1em;
+  vertical-align: middle;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.12) 30%,
+    rgba(255, 255, 255, 0.06) 70%,
+    transparent
+  );
+  border-radius: 1px;
+}
+
 @keyframes chat-rise {
   from {
     opacity: 0;
@@ -430,6 +548,109 @@ body {
   width: min(1000px, 100%);
   margin: 0 auto;
   pointer-events: auto;
+}
+
+/* Rupin first screen: centered in the sideline → viewport lane */
+body[data-character="Rupin"] .chat-panel {
+  animation: none;
+  transform: none;
+}
+
+body[data-character="Rupin"] .chat-panel__composer {
+  position: fixed;
+  top: 50%;
+  /* midpoint between fixed sideline x:365 and viewport right */
+  left: calc(50vw + 182.5px);
+  z-index: 4;
+  width: min(
+    1000px,
+    calc(
+      100vw - var(--sideline-left) - var(--archive-gutter) -
+        var(--archive-gutter)
+    )
+  );
+  max-width: 1000px;
+  margin: 0;
+  transform: translate(-50%, -50%);
+}
+
+body[data-character="Rupin"] .prompt__field {
+  min-height: 78px;
+  padding: 9px 8px 9px 20px;
+}
+
+body[data-character="Rupin"] .prompt__field input,
+body[data-character="Rupin"] .prompt__send {
+  font-size: 18px;
+}
+
+body[data-character="Rupin"] .prompt__send {
+  height: 61px;
+  min-height: 61px;
+}
+
+/* Figma 대화중: composer docks bottom after first send */
+body.chat-started .chat-panel {
+  animation: none;
+  transform: none;
+}
+
+body.chat-started .chat-panel__composer,
+body.chat-started .chat-panel__composer--runaway,
+body.chat-started .chat-panel__composer--runaway.is-locked {
+  position: fixed !important;
+  top: auto !important;
+  bottom: var(--composer-bottom);
+  left: calc(50vw + 182.5px) !important;
+  right: auto !important;
+  z-index: 10;
+  width: min(
+    var(--composer-w),
+    calc(
+      100vw - var(--sideline-left) - var(--archive-gutter) -
+        var(--archive-gutter)
+    )
+  ) !important;
+  max-width: var(--composer-w) !important;
+  margin: 0 !important;
+  transform: translateX(-50%) !important;
+  overflow: visible;
+  pointer-events: auto !important;
+  will-change: auto;
+  transition: none;
+}
+
+body.chat-started .prompt__field {
+  min-height: 78px;
+  padding: 9px 8px 9px 20px;
+}
+
+body.chat-started .prompt__field input,
+body.chat-started .prompt__send {
+  font-size: 18px;
+}
+
+body.chat-started .prompt__send {
+  width: var(--send-w);
+  min-width: var(--send-w);
+  max-width: var(--send-w);
+  height: 61px;
+  min-height: 61px;
+}
+
+body.chat-started .chat-panel__thread {
+  height: calc(100dvh - var(--composer-bottom) - var(--composer-dock-h));
+  max-height: calc(100dvh - var(--composer-bottom) - var(--composer-dock-h));
+}
+
+body.chat-started .chat-panel__composer--runaway input,
+body.chat-started .chat-panel__composer--runaway button {
+  pointer-events: auto;
+  cursor: text;
+}
+
+body.chat-started .chat-panel__composer--runaway button {
+  cursor: pointer;
 }
 
 .chat-panel__composer--runaway {

@@ -361,7 +361,7 @@ if (!composer || !input) {
   }
 
   function tick() {
-    if (locked) return;
+    if (locked || document.body.classList.contains("chat-started")) return;
 
     collideWithCursor();
     applyWaterBob();
@@ -456,6 +456,10 @@ if (!composer || !input) {
   }
 
   function bindRunaway() {
+    if (document.body.dataset.character === "Rupin") {
+      return;
+    }
+
     input.disabled = true;
     initHeadline(headline);
     catchReadyAt = Math.random() * MAX_DODGE_MS;
@@ -494,6 +498,7 @@ if (!composer || !input) {
     });
 
     window.addEventListener("resize", () => {
+      if (document.body.classList.contains("chat-started")) return;
       if (locked) {
         enforceVisible();
         return;
@@ -503,6 +508,7 @@ if (!composer || !input) {
     });
 
     window.visualViewport?.addEventListener("resize", () => {
+      if (document.body.classList.contains("chat-started")) return;
       if (locked) {
         enforceVisible();
         return;

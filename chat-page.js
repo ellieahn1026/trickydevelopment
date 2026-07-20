@@ -1,35 +1,22 @@
-const ARCHIVE_TEXT = `ARCHIVING PROCESS I was going to rank them by popularity. That felt too
-          predictable. Popularity is just loud agreement. Maybe I should rank them
-          by how long I kept thinking about them. No. Actually... the one that
-          annoyed me the most probably deserves to stay near the top. Wait. I
-          forgot what I was optimizing for. Importance? Interest? Regret? Those
-          are almost the same thing. Not really. IU is staying. Not because she's
-          objectively the best. Because I didn't argue with myself while thinking
-          about her. That feels suspicious. Moving her lower. AESPA. Too polished.
-          Maybe that's exactly why they belong higher. Or lower. I can't tell.
-          Keeping them in the middle. Stray Kids generated the most noise. Noise
-          occupies space. Space is a kind of importance. Promoted. NewJeans.
-          Everyone already knows them. Do archives need things everyone remembers?
-          Probably not. Demoted. Unless... people forget obvious things first.
-          Moving them back up. I think I'm done. I'm not convinced. Saving anyway.`;
+const ARCHIVE_TEXT = "";
 
 const CHARACTERS = [
   {
     name: "Potter",
     color: "#ff399f",
-    colorActive: "#ff0084",
+    colorActive: "#ff0015",
     href: "./index.html",
   },
   {
     name: "Rupin",
     color: "#ff5e00",
-    colorActive: "#de5100",
+    colorActive: "#e1ff00",
     href: "./rupin.html",
   },
   {
     name: "Tom",
     color: "#54fe54",
-    colorActive: "#00df00",
+    colorActive: "#00ffe1",
     href: "./tom.html",
   },
 ];
@@ -71,7 +58,7 @@ function chatPage({
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,600;9..40,700&family=Datatype:wght@400&display=swap"
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,600;9..40,700&family=Datatype:wght@400;600&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./pretendard-kr.css" />

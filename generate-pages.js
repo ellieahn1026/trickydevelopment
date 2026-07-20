@@ -18,7 +18,7 @@ writeFileSync(
   chatPage({
     activeName: "Rupin",
     title: "RupinGPT — hackedGPT",
-    headline: DEFAULT_HEADLINE,
+    headline: "I know everything. Just Ask and Believe.",
     placeholder: "Ask to RupinGPT",
   }),
 );
