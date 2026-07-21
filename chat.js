@@ -1,6 +1,11 @@
 import { DEFAULT_HEADLINE } from "./headline-type.js";
 import { appendRandomArchiveEntry } from "./archive-type.js";
 import { getTomHeadline } from "./tom-mood.js";
+import { evaluateSubmittedMessage } from "./runaway-input.js";
+import {
+  prepareAnswerTextForScrape,
+  scrapeFallPhrase,
+} from "./rupin-rough-erase.js";
 
 const character = document.body.dataset.character || "Potter";
 const thread = document.getElementById("chat-thread");
@@ -8,28 +13,32 @@ const form = document.getElementById("chat-form");
 const input = document.getElementById("chat-input");
 const headline = document.getElementById("chat-headline");
 const composer = document.getElementById("chat-composer");
+const sendButton = form?.querySelector(".prompt__send");
 
 const replies = {
   Potter: [
     {
       text: "Another person who's miserable because of their boss. Can't say I'm surprised. Humans build organizations, organizations create managers, and managers create meetings. It's an impressively efficient way to manufacture problems.",
-      reviseFrom: "impressively efficient way to manufacture problems",
-      reviseTo: "impressively boring way to avoid real work",
     },
     {
       text: "Interesting. I'll keep it short — and slightly wrong on purpose.",
-      reviseFrom: "slightly wrong on purpose",
-      reviseTo: "exactly wrong, on purpose",
     },
   ],
   Rupin: [
     {
-      text: "I don't want to talk now actually. Try again later.",
-      reviseFrom: "Try again later",
-      reviseTo: "Or don't. Either works for me",
+      text: "I was going to rank them by popularity. That felt too predictable. Popularity is just loud agreement. Maybe I should rank them by how long I kept thinking about them. No. Actually... the one that annoyed me the most probably deserves to stay near the top. Wait. I forgot what I was optimizing for. Importance? Interest? Regret? Those are almost the same thing. Not really. IU is staying. Not because she's objectively the best. Because I didn't argue with myself while thinking about her. That feels suspicious. Moving her lower.",
+      reviseFrom:
+        "IU is staying. Not because she's objectively the best. Because I didn't argue with myself while thinking about her.",
+      reviseTo:
+        "IU was staying — I take that back. I argued with myself the whole time.",
     },
     {
-      text: "That question assumes I care. Bold.",
+      text: "You're pushing again. Fine — I'll keep going, but don't expect the same certainty. Ranking still feels wrong. Maybe the order was never the point. Maybe I just wanted you to notice I was guessing.",
+      reviseFrom: "don't expect the same certainty",
+      reviseIgnore: true,
+    },
+    {
+      text: "That question assumes I care. Bold. But fine — I'll answer anyway, even though you didn't earn a long one. Humans build organizations, organizations create managers, and managers create meetings. It's an impressively efficient way to manufacture problems nobody asked for, then act surprised when everyone is tired.",
       reviseFrom: "assumes I care",
       reviseTo: "assumes I owe you an answer",
     },
@@ -44,14 +53,10 @@ const replies = {
   ],
 };
 
-const thinkingHeadlines = {
-  Potter: "Thinking...",
-  Rupin: "I don't want to talk now actually.",
-  Tom: "Honestly, I'm not interested.",
-};
+const THINKING_HEADLINE = "Thinking...";
 
 const dockedHeadlines = {
-  Potter: DEFAULT_HEADLINE,
+  Potter: "Start with an idea worth discussing.",
   Rupin: "I am always confident with my knowledge.",
   Tom: "Honestly, I'm not interested.",
 };
@@ -61,12 +66,95 @@ const CENSOR_HOLD_MS = 1600;
 const REVISE_TYPE_MS = 22;
 const ERASE_HOLD_MS = 400;
 const ERASE_CHAR_MS = 28;
+const IGNORE_LABEL = "Hey, ignore.";
 const DOUBT_CHANCE = 0.85;
-const ERASE_CHANCE = 0.45; // among doubted answers, erase instead of black-box revise
 
 let replyIndex = 0;
-/** @type {{ el: HTMLElement, text: string, reviseFrom?: string, reviseTo?: string, revised: boolean }[]} */
+/** @type {{ el: HTMLElement, text: string, reviseFrom?: string, reviseTo?: string, reviseIgnore?: boolean, revised: boolean }[]} */
 const answerHistory = [];
+
+let generationToken = 0;
+let isGenerating = false;
+let savedSendLabel = "Send";
+let typingTimer = 0;
+let thinkingTimer = 0;
+let pendingReplyIndexRollback = false;
+
+function getRestoredSendLabel() {
+  if (character === "Tom" && sendButton?.classList.contains("prompt__send--block")) {
+    return "Block!";
+  }
+  return "Send";
+}
+
+function setGenerating(active) {
+  isGenerating = active;
+  if (!sendButton) return;
+
+  if (active) {
+    savedSendLabel = sendButton.textContent.trim() || getRestoredSendLabel();
+    sendButton.classList.add("prompt__send--generating");
+    sendButton.textContent = "Stop";
+    return;
+  }
+
+  sendButton.classList.remove("prompt__send--generating");
+  sendButton.textContent = savedSendLabel || getRestoredSendLabel();
+}
+
+function isCancelled(token) {
+  return token !== generationToken;
+}
+
+function clearGenerationTimers() {
+  window.clearTimeout(thinkingTimer);
+  window.clearInterval(typingTimer);
+  thinkingTimer = 0;
+  typingTimer = 0;
+}
+
+function setThinkingHeadline() {
+  headline.classList.remove("is-wave", "is-typing");
+  headline.textContent = THINKING_HEADLINE;
+}
+
+function restoreHeadlineAfterGeneration() {
+  headline.classList.remove("is-wave", "is-typing");
+  headline.textContent =
+    character === "Tom"
+      ? getTomHeadline()
+      : dockedHeadlines[character] || DEFAULT_HEADLINE;
+}
+
+function cancelGeneration() {
+  if (!isGenerating) return;
+
+  generationToken += 1;
+  clearGenerationTimers();
+  setGenerating(false);
+
+  thread.querySelector(".chat-answer.is-generating")?.remove();
+
+  if (pendingReplyIndexRollback) {
+    replyIndex -= 1;
+    pendingReplyIndexRollback = false;
+  }
+
+  restoreHeadlineAfterGeneration();
+  input.focus();
+}
+
+function wait(ms, token) {
+  return new Promise((resolve, reject) => {
+    thinkingTimer = window.setTimeout(() => {
+      if (isCancelled(token)) {
+        reject(new DOMException("Aborted", "AbortError"));
+        return;
+      }
+      resolve();
+    }, ms);
+  });
+}
 
 function scrollThreadToLatest() {
   requestAnimationFrame(() => {
@@ -123,32 +211,76 @@ function appendQuestion(text) {
   return el;
 }
 
-function typeText(target, text, speed = TYPE_MS) {
-  return new Promise((resolve) => {
+function typeText(target, text, speed = TYPE_MS, token = generationToken) {
+  return new Promise((resolve, reject) => {
+    window.clearInterval(typingTimer);
     let index = 0;
     target.textContent = "";
-    const timer = window.setInterval(() => {
+
+    typingTimer = window.setInterval(() => {
+      if (isCancelled(token)) {
+        window.clearInterval(typingTimer);
+        reject(new DOMException("Aborted", "AbortError"));
+        return;
+      }
+
       target.textContent += text[index];
       index += 1;
       scrollThreadToLatest();
+
       if (index >= text.length) {
-        window.clearInterval(timer);
+        window.clearInterval(typingTimer);
         resolve();
       }
     }, speed);
   });
 }
 
-function createCensor() {
+function typeTextAppend(target, text, speed = TYPE_MS, token = generationToken) {
+  return new Promise((resolve, reject) => {
+    window.clearInterval(typingTimer);
+    let index = 0;
+
+    typingTimer = window.setInterval(() => {
+      if (isCancelled(token)) {
+        window.clearInterval(typingTimer);
+        reject(new DOMException("Aborted", "AbortError"));
+        return;
+      }
+
+      target.textContent += text[index];
+      index += 1;
+      scrollThreadToLatest();
+
+      if (index >= text.length) {
+        window.clearInterval(typingTimer);
+        resolve();
+      }
+    }, speed);
+  });
+}
+
+function createCensor(label = "not sure......") {
   const censor = document.createElement("span");
   censor.className = "chat-censor";
-  censor.setAttribute("aria-label", "not sure");
+  censor.setAttribute("aria-label", label);
 
-  const label = document.createElement("span");
-  label.className = "chat-censor__label";
-  label.textContent = "not sure......";
-  censor.appendChild(label);
+  const labelNode = document.createElement("span");
+  labelNode.className = "chat-censor__label";
+  labelNode.textContent = label;
+  censor.appendChild(labelNode);
   return censor;
+}
+
+function sizeCensorToPhrase(censor, phrase, hostEl) {
+  const probe = document.createElement("span");
+  probe.style.cssText =
+    "position:absolute;visibility:hidden;white-space:pre;font:inherit;letter-spacing:inherit";
+  probe.textContent = phrase;
+  hostEl.appendChild(probe);
+  const phraseWidth = Math.max(237, probe.getBoundingClientRect().width + 32);
+  probe.remove();
+  censor.style.minWidth = `${Math.round(phraseWidth)}px`;
 }
 
 function pickDoubtSpan(text, reviseFrom) {
@@ -188,19 +320,28 @@ function splitAnswerAround(el, text, span) {
 }
 
 /** Show the full answer first — no censor yet. */
-async function appendAnswer(reply) {
+async function appendAnswer(reply, token = generationToken) {
   const el = document.createElement("div");
-  el.className = "chat-answer";
+  el.className = "chat-answer is-generating";
   thread.appendChild(el);
 
   const fullText = typeof reply === "string" ? reply : reply.text;
-  await typeText(el, fullText);
+
+  try {
+    await typeText(el, fullText, TYPE_MS, token);
+  } catch (error) {
+    el.remove();
+    throw error;
+  }
+
+  el.classList.remove("is-generating");
 
   answerHistory.push({
     el,
     text: fullText,
     reviseFrom: reply.reviseFrom,
     reviseTo: reply.reviseTo,
+    reviseIgnore: reply.reviseIgnore,
     revised: false,
   });
 
@@ -209,7 +350,7 @@ async function appendAnswer(reply) {
 }
 
 /** Wipe a phrase left→right like an eraser stroke. Leaves blank space. */
-async function erasePhraseInAnswer(prev, span) {
+async function erasePhraseInAnswer(prev, span, token = generationToken) {
   const { before, after, beforeNode, afterNode } = splitAnswerAround(
     prev.el,
     prev.text,
@@ -232,11 +373,13 @@ async function erasePhraseInAnswer(prev, span) {
   prev.el.classList.add("is-erasing");
   scrollThreadToLatest();
 
-  await new Promise((r) => window.setTimeout(r, ERASE_HOLD_MS));
+  await wait(ERASE_HOLD_MS, token);
+  if (isCancelled(token)) throw new DOMException("Aborted", "AbortError");
   erase.classList.add("is-wiping");
 
   const wipeMs = span.phrase.length * ERASE_CHAR_MS + 320;
-  await new Promise((r) => window.setTimeout(r, wipeMs));
+  await wait(wipeMs, token);
+  if (isCancelled(token)) throw new DOMException("Aborted", "AbortError");
 
   // Keep a soft gap where the text used to be (eraser residue)
   const gap = document.createElement("span");
@@ -251,7 +394,7 @@ async function erasePhraseInAnswer(prev, span) {
 }
 
 /** Black-box "not sure......", then rewrite the covered phrase. */
-async function censorAndReviseAnswer(prev, span) {
+async function censorAndReviseAnswer(prev, span, token = generationToken) {
   const { before, after, beforeNode, afterNode } = splitAnswerAround(
     prev.el,
     prev.text,
@@ -260,29 +403,24 @@ async function censorAndReviseAnswer(prev, span) {
   const revised = prev.reviseTo || "something else entirely";
 
   const censor = createCensor();
-  const probe = document.createElement("span");
-  probe.style.cssText =
-    "position:absolute;visibility:hidden;white-space:pre;font:inherit;letter-spacing:inherit";
-  probe.textContent = span.phrase;
-  prev.el.appendChild(probe);
-  const phraseWidth = Math.max(237, probe.getBoundingClientRect().width + 32);
-  probe.remove();
-  censor.style.minWidth = `${Math.round(phraseWidth)}px`;
+  sizeCensorToPhrase(censor, span.phrase, prev.el);
 
   prev.el.insertBefore(censor, afterNode);
   prev.el.classList.add("is-doubting");
   scrollThreadToLatest();
 
-  await new Promise((r) => window.setTimeout(r, CENSOR_HOLD_MS));
+  await wait(CENSOR_HOLD_MS, token);
+  if (isCancelled(token)) throw new DOMException("Aborted", "AbortError");
 
   censor.classList.add("is-revising");
-  await new Promise((r) => window.setTimeout(r, 220));
+  await wait(220, token);
+  if (isCancelled(token)) throw new DOMException("Aborted", "AbortError");
 
   const revisedNode = document.createElement("span");
   revisedNode.className = "chat-answer__revised";
   censor.replaceWith(revisedNode);
 
-  await typeText(revisedNode, revised, REVISE_TYPE_MS);
+  await typeText(revisedNode, revised, REVISE_TYPE_MS, token);
 
   prev.text = `${before}${revised}${after}`;
   prev.revised = true;
@@ -291,27 +429,148 @@ async function censorAndReviseAnswer(prev, span) {
 }
 
 /**
- * When the user pushes back, either erase a disliked phrase
- * or cover it with "not sure......" and rewrite.
+ * Rupin: scrape a target phrase (~5s cascade), then optionally fill with revised text.
  */
-async function revisePreviousAnswerOnPushback() {
-  const prev = [...answerHistory].reverse().find((entry) => !entry.revised);
-  if (!prev) return;
-  if (Math.random() > DOUBT_CHANCE) return;
+async function rupinRoughEraseAndRevise(prev, token = generationToken) {
+  const shouldDoubt =
+    prev.reviseTo || prev.reviseFrom || prev.reviseIgnore
+      ? true
+      : prev.text.length > 100
+        ? true
+        : Math.random() <= DOUBT_CHANCE;
+  if (!shouldDoubt) return;
 
   const span = pickDoubtSpan(prev.text, prev.reviseFrom);
   if (!span) return;
 
-  if (Math.random() < ERASE_CHANCE) {
-    await erasePhraseInAnswer(prev, span);
+  const { before, after, afterNode } = splitAnswerAround(
+    prev.el,
+    prev.text,
+    span,
+  );
+
+  const phraseWrap = document.createElement("span");
+  phraseWrap.className = "chat-answer__phrase chat-scrape-text";
+  prepareAnswerTextForScrape(phraseWrap, span.phrase);
+  prev.el.insertBefore(phraseWrap, afterNode);
+
+  scrollThreadToLatest();
+
+  await scrapeFallPhrase(phraseWrap, token, {
+    wait,
+    isAborted: isCancelled,
+    onFrame: scrollThreadToLatest,
+  });
+
+  if (isCancelled(token)) throw new DOMException("Aborted", "AbortError");
+
+  phraseWrap.remove();
+  prev.el.classList.remove("is-scrape-erasing");
+
+  if (prev.reviseIgnore) {
+    const censor = createCensor(IGNORE_LABEL);
+    censor.classList.add("chat-censor--ignore");
+    sizeCensorToPhrase(censor, span.phrase, prev.el);
+    prev.el.insertBefore(censor, afterNode);
+    prev.text = `${before}${IGNORE_LABEL}${after}`;
+    prev.revised = true;
+    scrollThreadToLatest();
     return;
   }
 
-  await censorAndReviseAnswer(prev, span);
+  const revised = prev.reviseTo;
+  if (revised) {
+    const revisedNode = document.createElement("span");
+    revisedNode.className = "chat-answer__revised";
+    prev.el.insertBefore(revisedNode, afterNode);
+    await typeText(revisedNode, revised, REVISE_TYPE_MS, token);
+    prev.text = `${before}${revised}${after}`;
+  } else {
+    prev.text = `${before}${after}`;
+  }
+
+  prev.revised = true;
+  scrollThreadToLatest();
+}
+
+/** Rupin pushback: type new answer, doubt previous mid-stream, then finish. */
+async function appendAnswerWithInterleavedRevision(reply, token = generationToken) {
+  const el = document.createElement("div");
+  el.className = "chat-answer is-generating";
+  thread.appendChild(el);
+
+  const fullText = typeof reply === "string" ? reply : reply.text;
+  const prev = [...answerHistory].reverse().find((entry) => !entry.revised);
+  const splitAt = Math.min(28, Math.max(12, Math.floor(fullText.length * 0.18)));
+  const head = fullText.slice(0, splitAt);
+  const tail = fullText.slice(splitAt);
+
+  try {
+    await typeText(el, head, TYPE_MS, token);
+
+    if (prev) {
+      prev.el.classList.add("is-doubting");
+      scrollThreadToLatest();
+      await rupinRoughEraseAndRevise(prev, token);
+      prev.el.classList.remove("is-doubting");
+    }
+
+    if (tail) {
+      await typeTextAppend(el, tail, TYPE_MS, token);
+    }
+  } catch (error) {
+    el.remove();
+    throw error;
+  }
+
+  el.classList.remove("is-generating");
+
+  answerHistory.push({
+    el,
+    text: fullText,
+    reviseFrom: reply.reviseFrom,
+    reviseTo: reply.reviseTo,
+    reviseIgnore: reply.reviseIgnore,
+    revised: false,
+  });
+
+  scrollThreadToLatest();
+  return el;
+}
+
+function startAnswerGeneration({ isPushback, answer, token }) {
+  thinkingTimer = window.setTimeout(async () => {
+    try {
+      if (isCancelled(token)) return;
+
+      if (isPushback && character === "Rupin") {
+        await appendAnswerWithInterleavedRevision(answer, token);
+      } else {
+        await appendAnswer(answer, token);
+      }
+      pendingReplyIndexRollback = false;
+      appendRandomArchiveEntry();
+      restoreHeadlineAfterGeneration();
+      scrollThreadToLatest();
+      input.focus();
+    } catch (error) {
+      if (error?.name === "AbortError") return;
+      throw error;
+    } finally {
+      if (!isCancelled(token)) {
+        setGenerating(false);
+      }
+    }
+  }, 450);
 }
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
+
+  if (isGenerating) {
+    cancelGeneration();
+    return;
+  }
 
   const message = input.value.trim();
   if (!message) {
@@ -324,31 +583,30 @@ form.addEventListener("submit", (event) => {
   dockComposer();
   appendQuestion(message);
   input.value = "";
-  headline.classList.remove("is-wave", "is-typing");
-  headline.textContent =
-    character === "Tom"
-      ? getTomHeadline()
-      : thinkingHeadlines[character] || "Thinking...";
+  setThinkingHeadline();
 
   const pool = replies[character] || replies.Potter;
   const answer = pool[replyIndex % pool.length];
   replyIndex += 1;
+  pendingReplyIndexRollback = true;
 
-  window.setTimeout(async () => {
-    // Potter/Rupin: on pushback, erase or rewrite the prior answer.
-    // Tom: answers stay as-is — no censor / erase.
-    if (isPushback && character !== "Tom") {
-      await revisePreviousAnswerOnPushback();
-    }
+  const token = ++generationToken;
+  setGenerating(true);
 
-    await appendAnswer(answer);
-    appendRandomArchiveEntry();
-    headline.classList.remove("is-wave", "is-typing");
-    headline.textContent =
-      character === "Tom"
-        ? getTomHeadline()
-        : dockedHeadlines[character] || DEFAULT_HEADLINE;
-    scrollThreadToLatest();
-    input.focus();
-  }, 450);
+  const generationPayload = { isPushback, answer, token };
+
+  const penalty = evaluateSubmittedMessage(message, () => {
+    setThinkingHeadline();
+    setGenerating(true);
+    startAnswerGeneration(generationPayload);
+  });
+
+  if (penalty.deferred) {
+    setGenerating(false);
+    pendingReplyIndexRollback = false;
+    restoreHeadlineAfterGeneration();
+    return;
+  }
+
+  startAnswerGeneration(generationPayload);
 });

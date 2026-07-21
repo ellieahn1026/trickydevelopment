@@ -2,7 +2,11 @@ import {
   initHeadline,
   triggerRejectHeadline,
   typeLockHeadline,
+  setDoubtHeadline,
+  setDistantHeadline,
 } from "./headline-type.js";
+import { scoreInput } from "./input-score.js";
+import { recordComposerCenter } from "./composer-trail.js";
 
 const CURSOR_RADIUS = 36;
 const REPEL_RADIUS = 200;
@@ -16,7 +20,9 @@ const ESCAPE_BLEND = 0.32;
 const MIN_SPEED = 2.2;
 const IDLE_KICK = 3.5;
 const BOB_STRENGTH = 0.28;
-const MAX_DODGE_MS = 15_000;
+const INITIAL_MAX_DODGE_MS = 15_000;
+const PENALTY_MIN_CATCH_MS = 5_000;
+const PENALTY_MAX_CATCH_MS = 10_000;
 const SEND_LEAVE_DIST = 72;
 
 const composer = document.querySelector(".chat-panel__composer");
@@ -24,6 +30,9 @@ const input = document.getElementById("chat-input");
 const headline = document.getElementById("chat-headline");
 const sendButton = document.querySelector(".prompt__send");
 const sideline = document.querySelector(".sideline");
+
+/** @type {(message: string, onCaught?: () => void) => { deferred: boolean }} */
+let evaluateSubmittedMessage = () => ({ deferred: false });
 
 if (!composer || !input) {
   console.warn("Runaway input: required elements not found");
@@ -46,6 +55,10 @@ if (!composer || !input) {
   let catchReadyAt = 0;
   let maxDodgeTimer = 0;
   let catchReadyTimer = 0;
+  let lowScoreStrikes = 0;
+  let penaltyRunawayActive = false;
+  let pendingCaughtCallback = null;
+  let activeMaxDodgeMs = INITIAL_MAX_DODGE_MS;
 
   function distanceCursorToComposer() {
     const rect = composer.getBoundingClientRect();
@@ -220,6 +233,7 @@ if (!composer || !input) {
 
     composer.style.left = `${posX}px`;
     composer.style.top = `${posY}px`;
+    recordComposerCenter(composer);
   }
 
   function containInBounds() {
@@ -361,7 +375,13 @@ if (!composer || !input) {
   }
 
   function tick() {
-    if (locked || document.body.classList.contains("chat-started")) return;
+    if (locked) return;
+    if (
+      document.body.classList.contains("chat-started") &&
+      !penaltyRunawayActive
+    ) {
+      return;
+    }
 
     collideWithCursor();
     applyWaterBob();
@@ -427,26 +447,151 @@ if (!composer || !input) {
     enableCatch();
   }
 
+  function clearPenaltyVisuals() {
+    composer.classList.remove("is-diagonal-nudge");
+  }
+
+  function syncCatchPosition(animate = false) {
+    const catchX = posX;
+    const catchY = posY;
+    composer.style.setProperty("--catch-x", `${catchX}px`);
+    composer.style.setProperty("--catch-y", `${catchY}px`);
+    composer.style.setProperty("left", `${catchX}px`, "important");
+    composer.style.setProperty("top", `${catchY}px`, "important");
+    composer.dataset.catchX = String(catchX);
+    composer.dataset.catchY = String(catchY);
+    if (animate) composer.classList.add("is-diagonal-nudge");
+  }
+
+  function nudgeComposerDiagonal() {
+    recordComposerCenter(composer);
+    syncSize();
+    const rect = composer.getBoundingClientRect();
+    posX = rect.left;
+    posY = rect.top;
+    const bounds = getBounds();
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 220 + Math.random() * 260;
+    posX = clamp(posX + Math.cos(angle) * dist, bounds.minX, bounds.maxX);
+    posY = clamp(posY + Math.sin(angle) * dist, bounds.minY, bounds.maxY);
+
+    syncCatchPosition(true);
+    window.setTimeout(() => {
+      composer.classList.remove("is-diagonal-nudge");
+      recordComposerCenter(composer);
+    }, 520);
+  }
+
+  function applyPenaltyStage1() {
+    setDoubtHeadline(headline);
+    nudgeComposerDiagonal();
+  }
+
+  function applyPenaltyStage2() {
+    setDistantHeadline(headline);
+    nudgeComposerDiagonal();
+  }
+
+  function startPenaltyRunaway(onCaught) {
+    lowScoreStrikes = 0;
+    pendingCaughtCallback = onCaught ?? null;
+    penaltyRunawayActive = true;
+    clearPenaltyVisuals();
+
+    window.clearTimeout(catchReadyTimer);
+    window.clearTimeout(maxDodgeTimer);
+    window.cancelAnimationFrame(rafId);
+
+    locked = false;
+    catchReady = false;
+    cursorTouching = false;
+    sendHitActive = false;
+    input.disabled = true;
+    input.blur();
+    document.body.classList.remove("composer-locked");
+
+    composer.classList.remove("is-locked", "is-catch-locked");
+    composer.style.removeProperty("--catch-x");
+    composer.style.removeProperty("--catch-y");
+    delete composer.dataset.catchX;
+    delete composer.dataset.catchY;
+
+    sendButton?.classList.remove("is-cursor-hit");
+    if (sendButton) {
+      sendButton.style.backgroundColor = "#000000";
+      sendButton.textContent = "Send";
+    }
+
+    composer.classList.add("chat-panel__composer--runaway");
+    measureSize();
+    syncSize();
+    const rect = composer.getBoundingClientRect();
+    posX = rect.left;
+    posY = rect.top;
+    enforceVisible();
+
+    const angle = Math.random() * Math.PI * 2;
+    velX = Math.cos(angle) * IDLE_KICK;
+    velY = Math.sin(angle) * IDLE_KICK;
+
+    // Catch unlocks randomly between 5s and 10s; forced catch by 10s.
+    catchReadyAt =
+      PENALTY_MIN_CATCH_MS +
+      Math.random() * (PENALTY_MAX_CATCH_MS - PENALTY_MIN_CATCH_MS);
+
+    catchReadyTimer = window.setTimeout(enableCatch, catchReadyAt);
+    maxDodgeTimer = window.setTimeout(forceEndDodge, PENALTY_MAX_CATCH_MS);
+    rafId = window.requestAnimationFrame(tick);
+  }
+
+  function handleMessageLowScore(onCaught) {
+    if (penaltyRunawayActive) return { deferred: true };
+
+    if (lowScoreStrikes === 0) {
+      applyPenaltyStage1();
+      lowScoreStrikes = 1;
+      return { deferred: false };
+    }
+
+    if (lowScoreStrikes === 1) {
+      applyPenaltyStage2();
+      lowScoreStrikes = 2;
+      return { deferred: false };
+    }
+
+    startPenaltyRunaway(onCaught);
+    return { deferred: true };
+  }
+
+  evaluateSubmittedMessage = function evaluateSubmittedMessageImpl(
+    message,
+    onCaught,
+  ) {
+    if (document.body.dataset.character !== "Potter") return { deferred: false };
+    if (!locked || penaltyRunawayActive) return { deferred: true };
+
+    const score = scoreInput(message);
+    if (score > 3) return { deferred: false };
+
+    return handleMessageLowScore(onCaught);
+  };
+
   function lockComposer(initialValue = "") {
     if (locked) return;
     locked = true;
+    penaltyRunawayActive = false;
+    activeMaxDodgeMs = INITIAL_MAX_DODGE_MS;
     window.clearTimeout(catchReadyTimer);
     window.clearTimeout(maxDodgeTimer);
     window.cancelAnimationFrame(rafId);
     velX = 0;
     velY = 0;
+
     // Freeze at the meeting point with the cursor
     placeAtCursor();
     enforceVisible();
-
-    const catchX = posX;
-    const catchY = posY;
-    composer.style.setProperty("--catch-x", `${catchX}px`);
-    composer.style.setProperty("--catch-y", `${catchY}px`);
-    composer.style.left = `${catchX}px`;
-    composer.style.top = `${catchY}px`;
-    composer.dataset.catchX = String(catchX);
-    composer.dataset.catchY = String(catchY);
+    syncCatchPosition();
+    recordComposerCenter(composer);
     composer.classList.add("is-locked", "is-catch-locked");
 
     sendButton?.classList.remove("is-cursor-hit");
@@ -460,9 +605,15 @@ if (!composer || !input) {
     document.body.classList.add("composer-locked");
     input.disabled = false;
     input.focus();
+
+    if (pendingCaughtCallback) {
+      const callback = pendingCaughtCallback;
+      pendingCaughtCallback = null;
+      callback();
+    }
+
     if (initialValue) {
       input.value = initialValue;
-      input.dispatchEvent(new Event("input", { bubbles: true }));
     }
   }
 
@@ -473,7 +624,8 @@ if (!composer || !input) {
 
     input.disabled = true;
     initHeadline(headline);
-    catchReadyAt = Math.random() * MAX_DODGE_MS;
+    activeMaxDodgeMs = INITIAL_MAX_DODGE_MS;
+    catchReadyAt = Math.random() * activeMaxDodgeMs;
 
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
@@ -483,7 +635,7 @@ if (!composer || !input) {
     });
 
     catchReadyTimer = window.setTimeout(enableCatch, catchReadyAt);
-    maxDodgeTimer = window.setTimeout(forceEndDodge, MAX_DODGE_MS);
+    maxDodgeTimer = window.setTimeout(forceEndDodge, activeMaxDodgeMs);
 
     document.addEventListener("mousemove", (event) => {
       mouseX = event.clientX;
@@ -509,8 +661,12 @@ if (!composer || !input) {
     });
 
     window.addEventListener("resize", () => {
+      if (penaltyRunawayActive) {
+        measureSize();
+        enforceVisible();
+        return;
+      }
       if (locked || document.body.classList.contains("chat-started")) {
-        // Keep catch lock; only clamp if somehow off-screen without moving to top
         if (composer.classList.contains("is-catch-locked")) return;
         enforceVisible();
         return;
@@ -520,6 +676,11 @@ if (!composer || !input) {
     });
 
     window.visualViewport?.addEventListener("resize", () => {
+      if (penaltyRunawayActive) {
+        measureSize();
+        enforceVisible();
+        return;
+      }
       if (locked || document.body.classList.contains("chat-started")) {
         if (composer.classList.contains("is-catch-locked")) return;
         enforceVisible();
@@ -536,3 +697,5 @@ if (!composer || !input) {
     bindRunaway();
   }
 }
+
+export { evaluateSubmittedMessage };

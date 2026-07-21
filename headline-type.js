@@ -1,6 +1,8 @@
 const DEFAULT_HEADLINE = "You want to talk with me? Follow.";
 const REJECT_HEADLINE = "I don't want to talk now actually.";
 const LOCK_HEADLINE = "ok then..I'll listen to you.";
+const DOUBT_HEADLINE = "Are you serious? Hmm";
+const DISTANT_HEADLINE = "Hey, My interest is far away.";
 const REJECT_HOLD_MS = 5_000;
 const TYPE_SPEED_MS = 28;
 
@@ -81,6 +83,22 @@ function triggerRejectHeadline(element) {
   }, REJECT_HOLD_MS);
 }
 
+function setPenaltyHeadline(element, text) {
+  if (!element) return;
+  clearHeadlineTimers();
+  element.classList.remove("is-wave", "is-typing");
+  element.textContent = text;
+  headlineMode = "penalty";
+}
+
+function setDoubtHeadline(element) {
+  setPenaltyHeadline(element, DOUBT_HEADLINE);
+}
+
+function setDistantHeadline(element) {
+  setPenaltyHeadline(element, DISTANT_HEADLINE);
+}
+
 function typeLockHeadline(element) {
   if (!element) return;
   typeHeadline(element, LOCK_HEADLINE);
@@ -90,7 +108,11 @@ export {
   DEFAULT_HEADLINE,
   REJECT_HEADLINE,
   LOCK_HEADLINE,
+  DOUBT_HEADLINE,
+  DISTANT_HEADLINE,
   initHeadline,
   triggerRejectHeadline,
   typeLockHeadline,
+  setDoubtHeadline,
+  setDistantHeadline,
 };

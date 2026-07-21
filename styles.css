@@ -85,6 +85,25 @@ body {
   overflow-x: hidden;
 }
 
+.composer-trail {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  overflow: visible;
+}
+
+.composer-trail__path {
+  fill: none;
+  stroke: lime;
+  stroke-width: 20pt;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 48 36;
+}
+
 .sideline {
   position: absolute;
   top: 0;
@@ -335,6 +354,14 @@ body {
   opacity: 0.5;
 }
 
+.prompt__send.prompt__send--generating,
+.prompt__send.prompt__send--generating:hover {
+  background: rgba(0, 0, 0, 0.5) !important;
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  color: #ffffff;
+  opacity: 1;
+}
+
 .chat-panel {
   position: static;
   z-index: 2;
@@ -464,6 +491,10 @@ body {
   min-width: 120px;
 }
 
+.chat-censor--ignore {
+  cursor: default;
+}
+
 .chat-answer.is-doubting {
   opacity: 0.92;
 }
@@ -474,6 +505,93 @@ body {
 
 .chat-answer__revised {
   color: #ffffff;
+}
+
+.chat-answer.is-scrape-erasing {
+  position: relative;
+}
+
+.chat-answer__phrase {
+  display: inline;
+  white-space: pre-wrap;
+}
+
+.chat-answer__phrase.is-dropping {
+  animation: phrase-shake 0.13s ease-in-out;
+}
+
+@keyframes phrase-shake {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  20% {
+    transform: translate(-2px, 1px) rotate(-0.5deg);
+  }
+  45% {
+    transform: translate(2px, -1px) rotate(0.45deg);
+  }
+  70% {
+    transform: translate(-1px, 0) rotate(-0.25deg);
+  }
+}
+
+.chat-scrape-text {
+  display: inline;
+  white-space: pre-wrap;
+}
+
+.chat-scrape__word {
+  display: inline;
+  white-space: pre-wrap;
+}
+
+.chat-scrape__space {
+  white-space: pre-wrap;
+}
+
+.chat-scrape__unit {
+  display: inline-block;
+  position: relative;
+}
+
+.chat-scrape__unit--chunk {
+  white-space: pre-wrap;
+}
+
+.chat-scrape__unit.is-scraped {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.letter-pile {
+  position: fixed;
+  left: var(--archive-left);
+  right: var(--archive-gutter-right);
+  bottom: 0;
+  height: 120px;
+  z-index: 2;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.letter-pile__piece {
+  position: fixed;
+  z-index: 2;
+  color: #ffffff;
+  white-space: nowrap;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.letter-pile__piece--chunk {
+  white-space: pre-wrap;
+  max-width: min(420px, 72vw);
+}
+
+.letter-pile .letter-pile__piece {
+  position: absolute;
+  z-index: 1;
 }
 
 /* Eraser wipe — characters scrub away left → right */
@@ -943,4 +1061,15 @@ body[data-tom-mood="idle"] .prompt__field {
   50% {
     transform: translateY(4px);
   }
+}
+
+/* Potter: low-score penalty — diagonal nudge while typing */
+body[data-character="Potter"] .chat-panel__composer.is-diagonal-nudge,
+body[data-character="Potter"]
+  .chat-panel__composer--runaway.is-catch-locked.is-diagonal-nudge {
+  transition:
+    left 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    top 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    --catch-x 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    --catch-y 0.45s cubic-bezier(0.22, 1, 0.36, 1) !important;
 }

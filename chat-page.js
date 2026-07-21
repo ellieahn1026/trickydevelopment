@@ -67,6 +67,9 @@ function chatPage({
   <body data-character="${activeName}">
     <div class="screen">
       <div class="stage">
+        <svg class="composer-trail" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+          <path class="composer-trail__path" />
+        </svg>
         <p class="archive-text" aria-hidden="true">${ARCHIVE_TEXT}</p>
 
         <header class="brand">
