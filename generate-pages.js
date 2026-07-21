@@ -29,7 +29,7 @@ writeFileSync(
   chatPage({
     activeName: "Tom",
     title: "TomGPT — hackedGPT",
-    headline: "Honestly, I'm not interested.",
+    headline: "What do you want to talk about?",
     placeholder: "Ask to TomGPT",
   }),
 );

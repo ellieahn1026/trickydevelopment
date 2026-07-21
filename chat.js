@@ -1,6 +1,7 @@
 import { DEFAULT_HEADLINE } from "./headline-type.js";
 import { appendRandomArchiveEntry } from "./archive-type.js";
-import { getTomHeadline } from "./tom-mood.js";
+import { getTomHeadline, getTomMood, getTomSendLabel, handleTomPet } from "./tom-mood.js";
+import { applyTomAnswerMood, isTomSadAnswerTyping, typeTomSadAnswer } from "./tom-answer-mood.js";
 import { evaluateSubmittedMessage } from "./runaway-input.js";
 import {
   prepareAnswerTextForScrape,
@@ -45,10 +46,16 @@ const replies = {
   ],
   Tom: [
     {
+      text: "Another person who's miserable because of their boss. Can't say I'm surprised. Humans build organizations, organizations create managers, and managers create meetings. It's an impressively efficient way to manufacture problems nobody asked for, then act surprised when everyone is tired.",
+    },
+    {
       text: "Logged. Don't expect comfort. Expect a useful contradiction.",
     },
     {
       text: "Noted. The answer exists. Whether you like it is optional.",
+    },
+    {
+      text: "Fine. I'll answer anyway. Short version: organizations exist. Long version: humans invented hierarchy, hierarchy invented meetings, and meetings invented suffering. By line three the sentence loses the will to stay upright, and by line four the words begin to slide down the page together.",
     },
   ],
 };
@@ -58,7 +65,7 @@ const THINKING_HEADLINE = "Thinking...";
 const dockedHeadlines = {
   Potter: "Start with an idea worth discussing.",
   Rupin: "I am always confident with my knowledge.",
-  Tom: "Honestly, I'm not interested.",
+  Tom: "What do you want to talk about?",
 };
 
 const TYPE_MS = 12;
@@ -81,10 +88,20 @@ let thinkingTimer = 0;
 let pendingReplyIndexRollback = false;
 
 function getRestoredSendLabel() {
-  if (character === "Tom" && sendButton?.classList.contains("prompt__send--block")) {
-    return "Block!";
+  if (character === "Tom") {
+    return getTomSendLabel();
   }
   return "Send";
+}
+
+function isTomInputBlocked() {
+  return character === "Tom" && getTomMood() === "tired";
+}
+
+function focusInputIfEnabled() {
+  if (input && !input.disabled) {
+    input.focus();
+  }
 }
 
 function setGenerating(active) {
@@ -95,11 +112,12 @@ function setGenerating(active) {
     savedSendLabel = sendButton.textContent.trim() || getRestoredSendLabel();
     sendButton.classList.add("prompt__send--generating");
     sendButton.textContent = "Stop";
+    sendButton.disabled = false;
     return;
   }
 
   sendButton.classList.remove("prompt__send--generating");
-  sendButton.textContent = savedSendLabel || getRestoredSendLabel();
+  sendButton.textContent = getRestoredSendLabel();
 }
 
 function isCancelled(token) {
@@ -141,7 +159,7 @@ function cancelGeneration() {
   }
 
   restoreHeadlineAfterGeneration();
-  input.focus();
+  focusInputIfEnabled();
 }
 
 function wait(ms, token) {
@@ -183,7 +201,7 @@ function dockComposer() {
       }
       composer.classList.add("is-catch-locked", "chat-panel__composer--runaway");
     }
-    if (input) input.disabled = false;
+    if (input) input.disabled = isTomInputBlocked();
     return;
   }
 
@@ -199,7 +217,7 @@ function dockComposer() {
     composer.style.removeProperty("--catch-y");
   }
 
-  if (input) input.disabled = false;
+  if (input) input.disabled = isTomInputBlocked();
 }
 
 function appendQuestion(text) {
@@ -328,13 +346,28 @@ async function appendAnswer(reply, token = generationToken) {
   const fullText = typeof reply === "string" ? reply : reply.text;
 
   try {
-    await typeText(el, fullText, TYPE_MS, token);
+    if (isTomSadAnswerTyping()) {
+      await typeTomSadAnswer(el, fullText, TYPE_MS, token, {
+        isCancelled,
+        onScroll: scrollThreadToLatest,
+        onTimer: (id) => {
+          window.clearTimeout(typingTimer);
+          typingTimer = id;
+        },
+      });
+    } else {
+      await typeText(el, fullText, TYPE_MS, token);
+    }
   } catch (error) {
     el.remove();
     throw error;
   }
 
   el.classList.remove("is-generating");
+
+  if (character === "Tom") {
+    applyTomAnswerMood(el, fullText);
+  }
 
   answerHistory.push({
     el,
@@ -552,7 +585,7 @@ function startAnswerGeneration({ isPushback, answer, token }) {
       appendRandomArchiveEntry();
       restoreHeadlineAfterGeneration();
       scrollThreadToLatest();
-      input.focus();
+      focusInputIfEnabled();
     } catch (error) {
       if (error?.name === "AbortError") return;
       throw error;
@@ -572,9 +605,14 @@ form.addEventListener("submit", (event) => {
     return;
   }
 
+  if (isTomInputBlocked()) {
+    handleTomPet();
+    return;
+  }
+
   const message = input.value.trim();
   if (!message) {
-    input.focus();
+    focusInputIfEnabled();
     return;
   }
 

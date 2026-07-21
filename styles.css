@@ -536,6 +536,74 @@ body {
   }
 }
 
+/* Tom happy: wobbly dancing answer letters */
+.chat-answer--happy-dance .chat-answer__char--dance {
+  display: inline-block;
+  transform-origin: 50% 85%;
+  will-change: transform;
+  animation: tom-answer-char-dance 0.58s ease-in-out infinite;
+  animation-delay: calc(var(--i) * -0.045s);
+  animation-duration: calc(0.5s + (var(--i) % 4) * 0.07s);
+}
+
+@keyframes tom-answer-char-dance {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  20% {
+    transform: translateY(-6px) rotate(-9deg);
+  }
+
+  40% {
+    transform: translateY(4px) rotate(8deg);
+  }
+
+  60% {
+    transform: translateY(-5px) rotate(-7deg);
+  }
+
+  80% {
+    transform: translateY(3px) rotate(6deg);
+  }
+}
+
+/* Tom sad: continuous bezier path layout */
+.chat-answer--sad-arc {
+  position: relative;
+  display: block;
+  overflow: visible;
+  max-width: min(var(--chat-bubble-max-w), 100%);
+  white-space: normal;
+}
+
+.chat-answer__sad-path {
+  position: relative;
+  display: block;
+  overflow: visible;
+}
+
+.chat-answer__sad-measure {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: pre;
+  font: inherit;
+  letter-spacing: inherit;
+}
+
+.chat-answer__char--sad {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: inline-block;
+  transform-origin: 0% 90%;
+  white-space: pre;
+  will-change: transform;
+  transition: transform 0.22s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
 .chat-scrape-text {
   display: inline;
   white-space: pre-wrap;
@@ -996,37 +1064,37 @@ body[data-tom-mood="happy"] .prompt__field {
   }
 }
 
-/* sad: field + button + text stretch left/right together */
-body[data-tom-mood="sad"] .prompt__field {
-  animation: tom-sad-stretch 2.4s ease-in-out infinite;
-}
-
-body[data-tom-mood="sad"] .prompt__field input,
-body[data-tom-mood="sad"] .prompt__send {
+/* sad: tilt + float handled in tom-sad-float.js */
+body[data-tom-mood="sad"] .prompt__field--sad-float {
+  width: 100%;
   transform-origin: center center;
-}
-
-@keyframes tom-sad-stretch {
-  0%,
-  100% {
-    transform: scaleX(1);
-  }
-  30% {
-    transform: scaleX(1.14);
-    transform-origin: left center;
-  }
-  50% {
-    transform: scaleX(1);
-  }
-  80% {
-    transform: scaleX(1.14);
-    transform-origin: right center;
-  }
+  will-change: transform;
 }
 
 /* tired: nodding-off dip — head drops, then snaps back */
 body[data-tom-mood="tired"] .prompt__field {
-  animation: tom-tired-nod 2.8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  transform-origin: center center;
+  animation: tom-tired-nod 3.5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+
+body[data-tom-mood="tired"] .prompt__field.prompt__field--pet-bounce {
+  animation: none !important;
+}
+
+body[data-tom-mood="tired"] #chat-input:disabled {
+  cursor: not-allowed;
+}
+
+body[data-tom-mood="tired"] .prompt__send--pet {
+  background: #6eebcb !important;
+  background-color: #6eebcb !important;
+  color: #000000;
+  opacity: 1;
+}
+
+body[data-tom-mood="tired"] .prompt__send--pet:hover {
+  background: #5de4c3 !important;
+  background-color: #5de4c3 !important;
 }
 
 @keyframes tom-tired-nod {
