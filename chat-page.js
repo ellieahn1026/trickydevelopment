@@ -1,5 +1,3 @@
-const ARCHIVE_TEXT = "";
-
 const CHARACTERS = [
   {
     name: "Potter",
@@ -58,10 +56,10 @@ function chatPage({
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,600;9..40,700&family=Datatype:wght@400;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;600;700&family=Datatype:wght@400;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./pretendard-kr.css" />
+    <link rel="stylesheet" href="./orbit-kr.css" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body data-character="${activeName}">
@@ -70,8 +68,6 @@ function chatPage({
         <svg class="composer-trail" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
           <path class="composer-trail__path" />
         </svg>
-        <p class="archive-text" aria-hidden="true">${ARCHIVE_TEXT}</p>
-
         <header class="brand">
           <a href="./index.html"><h1>hackedGPT</h1></a>
         </header>

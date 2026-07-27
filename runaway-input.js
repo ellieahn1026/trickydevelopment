@@ -4,6 +4,7 @@ import {
   typeLockHeadline,
   setDoubtHeadline,
   setDistantHeadline,
+  setConversationEndHeadline,
 } from "./headline-type.js";
 import { scoreInput } from "./input-score.js";
 import { recordComposerCenter } from "./composer-trail.js";
@@ -23,6 +24,7 @@ const BOB_STRENGTH = 0.28;
 const INITIAL_MAX_DODGE_MS = 15_000;
 const PENALTY_MIN_CATCH_MS = 5_000;
 const PENALTY_MAX_CATCH_MS = 10_000;
+const END_RUNAWAY_MAX_MS = 15_000;
 const SEND_LEAVE_DIST = 72;
 
 const composer = document.querySelector(".chat-panel__composer");
@@ -33,6 +35,9 @@ const sideline = document.querySelector(".sideline");
 
 /** @type {(message: string, onCaught?: () => void) => { deferred: boolean }} */
 let evaluateSubmittedMessage = () => ({ deferred: false });
+
+/** @type {(onCaught?: () => void) => void} */
+let startConversationEndRunaway = () => {};
 
 if (!composer || !input) {
   console.warn("Runaway input: required elements not found");
@@ -57,6 +62,7 @@ if (!composer || !input) {
   let catchReadyTimer = 0;
   let lowScoreStrikes = 0;
   let penaltyRunawayActive = false;
+  let conversationEndRunawayActive = false;
   let pendingCaughtCallback = null;
   let activeMaxDodgeMs = INITIAL_MAX_DODGE_MS;
 
@@ -378,7 +384,8 @@ if (!composer || !input) {
     if (locked) return;
     if (
       document.body.classList.contains("chat-started") &&
-      !penaltyRunawayActive
+      !penaltyRunawayActive &&
+      !conversationEndRunawayActive
     ) {
       return;
     }
@@ -492,10 +499,18 @@ if (!composer || !input) {
     nudgeComposerDiagonal();
   }
 
-  function startPenaltyRunaway(onCaught) {
-    lowScoreStrikes = 0;
+  function startRunawayMode(onCaught, options = {}) {
+    const {
+      maxDodgeMs = PENALTY_MAX_CATCH_MS,
+      minCatchMs = PENALTY_MIN_CATCH_MS,
+      catchWindowMs = PENALTY_MAX_CATCH_MS - PENALTY_MIN_CATCH_MS,
+      conversationEnd = false,
+      onStart,
+    } = options;
+
     pendingCaughtCallback = onCaught ?? null;
-    penaltyRunawayActive = true;
+    penaltyRunawayActive = !conversationEnd;
+    conversationEndRunawayActive = conversationEnd;
     clearPenaltyVisuals();
 
     window.clearTimeout(catchReadyTimer);
@@ -534,15 +549,32 @@ if (!composer || !input) {
     velX = Math.cos(angle) * IDLE_KICK;
     velY = Math.sin(angle) * IDLE_KICK;
 
-    // Catch unlocks randomly between 5s and 10s; forced catch by 10s.
-    catchReadyAt =
-      PENALTY_MIN_CATCH_MS +
-      Math.random() * (PENALTY_MAX_CATCH_MS - PENALTY_MIN_CATCH_MS);
+    catchReadyAt = conversationEnd
+      ? Math.random() * maxDodgeMs
+      : minCatchMs + Math.random() * catchWindowMs;
 
+    onStart?.();
     catchReadyTimer = window.setTimeout(enableCatch, catchReadyAt);
-    maxDodgeTimer = window.setTimeout(forceEndDodge, PENALTY_MAX_CATCH_MS);
+    maxDodgeTimer = window.setTimeout(forceEndDodge, maxDodgeMs);
     rafId = window.requestAnimationFrame(tick);
   }
+
+  function startPenaltyRunaway(onCaught) {
+    lowScoreStrikes = 0;
+    startRunawayMode(onCaught);
+  }
+
+  function startConversationEndRunawayImpl(onCaught) {
+    startRunawayMode(onCaught, {
+      conversationEnd: true,
+      maxDodgeMs: END_RUNAWAY_MAX_MS,
+      onStart: () => {
+        setConversationEndHeadline(headline);
+      },
+    });
+  }
+
+  startConversationEndRunaway = startConversationEndRunawayImpl;
 
   function handleMessageLowScore(onCaught) {
     if (penaltyRunawayActive) return { deferred: true };
@@ -568,6 +600,7 @@ if (!composer || !input) {
     onCaught,
   ) {
     if (document.body.dataset.character !== "Potter") return { deferred: false };
+    if (conversationEndRunawayActive) return { deferred: true };
     if (!locked || penaltyRunawayActive) return { deferred: true };
 
     const score = scoreInput(message);
@@ -580,6 +613,7 @@ if (!composer || !input) {
     if (locked) return;
     locked = true;
     penaltyRunawayActive = false;
+    conversationEndRunawayActive = false;
     activeMaxDodgeMs = INITIAL_MAX_DODGE_MS;
     window.clearTimeout(catchReadyTimer);
     window.clearTimeout(maxDodgeTimer);
@@ -661,7 +695,7 @@ if (!composer || !input) {
     });
 
     window.addEventListener("resize", () => {
-      if (penaltyRunawayActive) {
+      if (penaltyRunawayActive || conversationEndRunawayActive) {
         measureSize();
         enforceVisible();
         return;
@@ -676,7 +710,7 @@ if (!composer || !input) {
     });
 
     window.visualViewport?.addEventListener("resize", () => {
-      if (penaltyRunawayActive) {
+      if (penaltyRunawayActive || conversationEndRunawayActive) {
         measureSize();
         enforceVisible();
         return;
@@ -698,4 +732,4 @@ if (!composer || !input) {
   }
 }
 
-export { evaluateSubmittedMessage };
+export { evaluateSubmittedMessage, startConversationEndRunaway };

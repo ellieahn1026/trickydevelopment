@@ -3,6 +3,7 @@ const REJECT_HEADLINE = "I don't want to talk now actually.";
 const LOCK_HEADLINE = "ok then..I'll listen to you.";
 const DOUBT_HEADLINE = "Are you serious? Hmm";
 const DISTANT_HEADLINE = "Hey, My interest is far away.";
+const CONVERSATION_END_HEADLINE = "I'm done talking. Try again if you must.";
 const REJECT_HOLD_MS = 5_000;
 const TYPE_SPEED_MS = 28;
 
@@ -99,6 +100,10 @@ function setDistantHeadline(element) {
   setPenaltyHeadline(element, DISTANT_HEADLINE);
 }
 
+function setConversationEndHeadline(element) {
+  setPenaltyHeadline(element, CONVERSATION_END_HEADLINE);
+}
+
 function typeLockHeadline(element) {
   if (!element) return;
   typeHeadline(element, LOCK_HEADLINE);
@@ -110,9 +115,11 @@ export {
   LOCK_HEADLINE,
   DOUBT_HEADLINE,
   DISTANT_HEADLINE,
+  CONVERSATION_END_HEADLINE,
   initHeadline,
   triggerRejectHeadline,
   typeLockHeadline,
   setDoubtHeadline,
   setDistantHeadline,
+  setConversationEndHeadline,
 };

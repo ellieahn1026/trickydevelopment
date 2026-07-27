@@ -51,20 +51,15 @@ function measureChar(el, char) {
 }
 
 function getAnswerMaxWidth(el) {
-  const thread = el.closest(".chat-panel__thread");
-  const threadWidth = thread?.clientWidth ?? 640;
-  return Math.max(280, Math.floor(threadWidth * 0.92));
+  return Math.max(1, Math.ceil(el.getBoundingClientRect().width));
 }
 
-function droopRotation(index, arcStart, lineIndex, arcLineIndex) {
+function getDroopProgress(index, arcStart, textLength) {
   if (index < arcStart) {
     return 0;
   }
 
-  const linePastArc = lineIndex - arcLineIndex;
-  const charPastArc = index - arcStart;
-
-  return Math.min(7, linePastArc * 2 + charPastArc * 0.012);
+  return Math.min(1, (index - arcStart) / Math.max(1, textLength - arcStart - 1));
 }
 
 function layoutSadText(el, text, maxWidth, arcStart) {
@@ -74,8 +69,6 @@ function layoutSadText(el, text, maxWidth, arcStart) {
 
   let x = 0;
   let y = 0;
-  let lineIndex = 0;
-  let arcLineIndex = 0;
 
   for (let i = 0; i < chars.length; i += 1) {
     const width = widths[i];
@@ -83,17 +76,13 @@ function layoutSadText(el, text, maxWidth, arcStart) {
     if (x + width > maxWidth && x > 0) {
       x = 0;
       y += LINE_HEIGHT;
-      lineIndex += 1;
     }
 
-    if (i === arcStart) {
-      arcLineIndex = lineIndex;
-    }
-
+    const progress = getDroopProgress(i, arcStart, chars.length);
     positions.push({
       x,
-      y,
-      rot: droopRotation(i, arcStart, lineIndex, arcLineIndex),
+      y: y + 68 * progress * progress,
+      rot: 20 * progress,
       width,
     });
 
@@ -138,23 +127,43 @@ function createSadArcStructure(el, text) {
   return { pathWrap, positions, text };
 }
 
-function appendSadPathChar(pathWrap, char, position) {
+function measureStraightPositions(el, text) {
+  const textNode = el.firstChild;
+  const hostRect = el.getBoundingClientRect();
+  let offset = 0;
+
+  if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
+    return [...text].map(() => ({ x: 0, y: 0 }));
+  }
+
+  return [...text].map((char) => {
+    const range = document.createRange();
+    range.setStart(textNode, offset);
+    range.setEnd(textNode, offset + char.length);
+    const rect = range.getBoundingClientRect();
+    offset += char.length;
+
+    return {
+      x: rect.left - hostRect.left,
+      y: rect.top - hostRect.top,
+    };
+  });
+}
+
+function appendSadPathChar(pathWrap, char, position, startPosition, index) {
   const span = document.createElement("span");
   span.className = "chat-answer__char chat-answer__char--sad";
   span.textContent = char === " " ? "\u00a0" : char;
+  span.style.setProperty("--i", String(index));
+  span.style.transitionDelay = `${Math.min(index * 5, 450)}ms`;
 
   const { x, y, rot } = position;
-  const rad = (rot * Math.PI) / 180;
-  const slide = 4;
-  const startX = x - (rot === 0 ? slide : Math.cos(rad) * slide);
-  const startY = y - (rot === 0 ? 0 : Math.sin(rad) * slide);
-
-  span.style.transform = `translate(${startX.toFixed(2)}px, ${startY.toFixed(2)}px) rotate(${rot.toFixed(2)}deg)`;
+  span.style.transform = `translate(${startPosition.x.toFixed(2)}px, ${startPosition.y.toFixed(2)}px) rotate(0deg)`;
   pathWrap.appendChild(span);
 
-  requestAnimationFrame(() => {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
     span.style.transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) rotate(${rot.toFixed(2)}deg)`;
-  });
+  }));
 
   return span;
 }
@@ -184,36 +193,19 @@ function wrapHappyDance(el, text) {
   }
 }
 
-function typeTomSadAnswer(el, text, speed, token, { isCancelled, onScroll, onTimer }) {
+function animateSadArc(el, text) {
+  const straightPositions = measureStraightPositions(el, text);
   const { pathWrap, positions } = createSadArcStructure(el, text);
 
-  return new Promise((resolve, reject) => {
-    let index = 0;
-
-    const tick = () => {
-      if (isCancelled(token)) {
-        reject(new DOMException("Aborted", "AbortError"));
-        return;
-      }
-
-      appendSadPathChar(pathWrap, text[index], positions[index]);
-      index += 1;
-      onScroll?.();
-
-      if (index >= text.length) {
-        resolve();
-        return;
-      }
-
-      onTimer(window.setTimeout(tick, speed));
-    };
-
-    onTimer(window.setTimeout(tick, speed));
+  [...text].forEach((char, index) => {
+    appendSadPathChar(
+      pathWrap,
+      char,
+      positions[index],
+      straightPositions[index] ?? { x: 0, y: 0 },
+      index,
+    );
   });
-}
-
-function isTomSadAnswerTyping(mood = getTomMood()) {
-  return document.body.dataset.character === "Tom" && mood === "sad";
 }
 
 function applyTomAnswerMood(el, text, mood = getTomMood()) {
@@ -223,11 +215,9 @@ function applyTomAnswerMood(el, text, mood = getTomMood()) {
 
   if (mood === "happy") {
     wrapHappyDance(el, text);
+  } else if (mood === "sad") {
+    animateSadArc(el, text);
   }
 }
 
-export {
-  applyTomAnswerMood,
-  isTomSadAnswerTyping,
-  typeTomSadAnswer,
-};
+export { applyTomAnswerMood };

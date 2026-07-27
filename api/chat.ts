@@ -1,0 +1,74 @@
+import { isCharacterName } from "../lib/characters";
+import {
+  handlePotterChat,
+  type ConversationHistoryEntry,
+} from "../lib/conversation";
+import { generateChatReplyStream } from "../lib/openai";
+
+export default async function handler(req: any, res: any) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed." });
+  }
+
+  try {
+    const body = req.body ?? {};
+    const character = body.character;
+    const message = typeof body.message === "string" ? body.message.trim() : "";
+    const previousResponseId =
+      typeof body.previousResponseId === "string"
+        ? body.previousResponseId
+        : undefined;
+    const messages = Array.isArray(body.messages)
+      ? (body.messages as ConversationHistoryEntry[])
+      : undefined;
+
+    if (!character || !isCharacterName(character)) {
+      return res.status(400).json({ error: "Invalid character." });
+    }
+
+    if (!message) {
+      return res.status(400).json({ error: "Message is required." });
+    }
+
+    if (character === "Potter") {
+      const result = await handlePotterChat({
+        message,
+        messages,
+        agentState: body.agentState,
+      });
+      return res.status(200).json(result);
+    }
+
+    const upstream = await generateChatReplyStream({
+      character,
+      message,
+      previousResponseId,
+    });
+
+    res.status(200);
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+
+    if (!upstream.body) {
+      return res.end();
+    }
+
+    for await (const chunk of upstream.body) {
+      res.write(Buffer.from(chunk));
+    }
+
+    return res.end();
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Chat request failed.";
+    console.error("[api/chat]", message);
+
+    if (res.headersSent) {
+      return res.end();
+    }
+
+    return res.status(500).json({ error: message });
+  }
+}

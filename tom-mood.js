@@ -18,7 +18,7 @@ const MOODS = {
     blockInput: true,
     placeholder: "pet me if you want to talk again....Maybe I'll wake up",
   },
-  idle: {
+  common: {
     headline: "What do you want to talk about?",
     sendLabel: "Send",
     block: false,
@@ -34,12 +34,20 @@ const TIRED_NOD_EASING = "cubic-bezier(0.45, 0.05, 0.55, 0.95)";
 const TIRED_SLUMP_Y = 42;
 const TIRED_SLUMP_ROT = 4;
 const TIRED_NOD_SLUMP_PHASE = 0.38;
+const TYPING_GRACE_MS = 1200;
 
-let currentMood = "idle";
+/** 3-minute cycle — tired at 0:30, 1:20, 1:50, 2:30 */
+const CYCLE_MS = 3 * 60 * 1000;
+const TIRED_OFFSETS_MS = [30_000, 80_000, 110_000, 150_000];
+
+let currentMood = "common";
 let timerId = 0;
 let petCount = 0;
 let petAnim = null;
 let petBounceGen = 0;
+let lastInputAt = 0;
+/** @type {number[]} */
+let cycleTimerIds = [];
 
 function elements() {
   return {
@@ -50,17 +58,53 @@ function elements() {
 }
 
 function pickNextMood(exclude) {
-  const pool = MOOD_KEYS.filter((key) => key !== exclude);
+  const pool = MOOD_KEYS.filter((key) => key !== exclude && key !== "tired");
   return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function clearCycleTimers() {
+  cycleTimerIds.forEach((id) => window.clearTimeout(id));
+  cycleTimerIds = [];
+}
+
+function scheduleTiredCycle() {
+  clearCycleTimers();
+
+  for (const offset of TIRED_OFFSETS_MS) {
+    const id = window.setTimeout(() => {
+      if (document.body.dataset.character !== "Tom") return;
+      applyMood("tired");
+    }, offset);
+    cycleTimerIds.push(id);
+  }
+
+  const cycleId = window.setTimeout(() => {
+    scheduleTiredCycle();
+  }, CYCLE_MS);
+  cycleTimerIds.push(cycleId);
 }
 
 function randomHoldMs() {
   return MIN_HOLD_MS + Math.floor(Math.random() * (MAX_HOLD_MS - MIN_HOLD_MS));
 }
 
+function isUserEnteringMessage() {
+  const { input } = elements();
+  return Boolean(
+    input?.value.length ||
+      (document.activeElement === input &&
+        Date.now() - lastInputAt < TYPING_GRACE_MS),
+  );
+}
+
 function applyMood(mood) {
   const config = MOODS[mood];
   if (!config) return;
+
+  if (mood === "tired" && isUserEnteringMessage()) {
+    console.info("[tom-mood] tired skipped while user is typing");
+    return;
+  }
 
   currentMood = mood;
   document.body.dataset.tomMood = mood;
@@ -234,7 +278,7 @@ function getTomSendLabel() {
 }
 
 function getTomHeadline() {
-  return MOODS[currentMood]?.headline ?? MOODS.idle.headline;
+  return MOODS[currentMood]?.headline ?? MOODS.common.headline;
 }
 
 function getTomMood() {
@@ -244,7 +288,13 @@ function getTomMood() {
 function initTomMood() {
   if (document.body.dataset.character !== "Tom") return;
 
-  applyMood(pickNextMood(null));
+  const { input } = elements();
+  input?.addEventListener("input", () => {
+    lastInputAt = Date.now();
+  });
+
+  applyMood("common");
+  scheduleTiredCycle();
 }
 
 initTomMood();

@@ -2,7 +2,7 @@
   --bg: #0808fe;
   --white: #ffffff;
   --black: #000000;
-  --font-ui: "DM Sans", sans-serif;
+  --font-ui: "Arimo", sans-serif;
   --font-mono: "Datatype", ui-monospace, monospace;
 
   /* Figma-fixed chrome — never scale with viewport */
@@ -17,14 +17,14 @@
   --send-w: 180px;
   --send-h: 70px;
   --prompt-font: 20px;
+  --composer-font: var(--prompt-font);
   --headline-font: 18px;
   --headline-shadow: 0 4px 4px rgba(0, 0, 0, 0.25);
   --sideline: rgba(255, 255, 255, 0.3);
   --sideline-w: 1px;
-  /* archive-text: 3.4rem gutters between sideline and viewport right */
+  /* 3.4rem gutters between sideline and viewport right */
   --sideline-left: 365px;
   --archive-gutter: 3.4rem;
-  --archive-top: 26px;
   --archive-left: calc(var(--sideline-left) + var(--archive-gutter));
   --archive-gutter-right: var(--archive-gutter);
   /* Q/A max width = half of (sideline → viewport right) */
@@ -224,35 +224,31 @@ body {
   white-space: nowrap;
 }
 
-/* archive-text + thread share the same column box */
-.archive-text,
 .chat-panel__thread {
   position: absolute;
-  left: var(--archive-left);
-  right: var(--archive-gutter-right);
+  --chat-motion-gutter: 32px;
+  top: 0;
+  left: calc(var(--archive-left) - var(--chat-motion-gutter));
+  right: calc(var(--archive-gutter-right) - var(--chat-motion-gutter));
   width: auto;
   max-width: none;
   margin: 0;
   box-sizing: border-box;
-}
-
-.archive-text {
-  top: var(--archive-top);
-  z-index: 1;
-  font-family: var(--font-mono);
-  font-size: 18px;
-  font-weight: 400;
-  line-height: 1.3;
-  letter-spacing: -0.0132rem;
-  white-space: pre-wrap;
-  color: rgba(255, 255, 255, 0.4);
-  pointer-events: none;
-  animation: fade-in 1.2s ease both;
-}
-
-.archive-text.is-typing::after {
-  content: "|";
-  animation: headline-caret 0.75s step-end infinite;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 42px;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 0 var(--chat-motion-gutter) 32px;
+  scroll-behavior: smooth;
+  scroll-padding-bottom: 32px;
+  pointer-events: auto;
 }
 
 .prompt {
@@ -304,7 +300,7 @@ body {
   outline: none;
   background: transparent;
   font-family: var(--font-ui);
-  font-size: var(--prompt-font);
+  font-size: var(--composer-font);
   font-weight: 400;
   letter-spacing: -0.0132rem;
   color: var(--black);
@@ -326,7 +322,7 @@ body {
   background-color: #000000;
   color: var(--white);
   font-family: var(--font-ui);
-  font-size: 20px;
+  font-size: var(--composer-font);
   font-weight: 400;
   letter-spacing: -0.0132rem;
   cursor: pointer;
@@ -376,32 +372,11 @@ body {
   pointer-events: none;
 }
 
-/* Same column as archive-text — Q right / A left align to its edges */
-.chat-panel__thread {
-  top: 0;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 42px;
-  height: 66.666dvh;
-  max-height: 66.666dvh;
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  padding: 0;
-  scroll-behavior: smooth;
-  pointer-events: auto;
-  mask-image: linear-gradient(to bottom, transparent 0, #000 48px, #000 100%);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 48px, #000 100%);
-}
-
 .chat-panel__thread::-webkit-scrollbar {
   display: none;
 }
 
-/* Pushes first messages down to the 2/3 line; collapses as the stack grows */
+/* Keeps the first messages near the bottom; collapses as the stack grows */
 .chat-panel__thread::before {
   content: "";
   align-self: stretch;
@@ -411,7 +386,7 @@ body {
   pointer-events: none;
 }
 
-/* Question — archive-text right edge; max = half(sideline → viewport right) */
+/* Question — right edge; max = half(sideline → viewport right) */
 .chat-question {
   align-self: flex-end;
   flex-shrink: 0;
@@ -424,7 +399,7 @@ body {
   background: #000000;
   color: #ffffff;
   font-family: var(--font-ui);
-  font-size: 20px;
+  font-size: var(--composer-font);
   font-weight: 400;
   letter-spacing: -0.0132rem;
   line-height: 1.3;
@@ -435,7 +410,7 @@ body {
   animation: chat-rise 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* Answer — flush left with archive-text */
+/* Answer — flush left with content column */
 .chat-answer {
   align-self: flex-start;
   flex-shrink: 0;
@@ -449,15 +424,100 @@ body {
   text-indent: 0;
   color: #ffffff;
   font-family: var(--font-ui);
-  font-size: 20px;
+  font-size: var(--composer-font);
   font-weight: 400;
   letter-spacing: -0.0132rem;
   line-height: 1.3;
   text-align: left;
   overflow-wrap: anywhere;
   word-break: break-word;
+  white-space: pre-wrap;
+  transform-origin: center center;
+  will-change: transform;
+  animation: none;
+}
+
+.chat-answer--formatted {
+  min-width: min(280px, 100%);
   white-space: normal;
+}
+
+.chat-answer--formatted > :first-child {
+  margin-top: 0;
+}
+
+.chat-answer--formatted > :last-child {
+  margin-bottom: 0;
+}
+
+.chat-answer--formatted p {
+  margin: 0 0 0.85em;
+  white-space: pre-wrap;
+}
+
+.chat-answer--formatted h3,
+.chat-answer--formatted h4,
+.chat-answer--formatted h5 {
+  margin: 1.15em 0 0.45em;
+  font: inherit;
+  font-weight: 700;
+}
+
+.chat-answer--formatted ul,
+.chat-answer--formatted ol {
+  margin: 0.25em 0 0.9em;
+  padding-left: 1.45em;
+}
+
+.chat-answer--formatted li {
+  margin: 0.3em 0;
+  padding-left: 0.15em;
+}
+
+.chat-answer--formatted hr {
+  width: 100%;
+  margin: 1.15em 0;
+  border: 0;
+  border-top: 1px solid rgb(255 255 255 / 35%);
+}
+
+.chat-answer--formatted strong {
+  font-weight: 700;
+}
+
+.chat-answer--formatted code {
+  padding: 0.08em 0.3em;
+  border: 1px solid rgb(255 255 255 / 22%);
+  background: rgb(255 255 255 / 8%);
+  font-family: "Datatype", monospace;
+  font-size: 0.88em;
+}
+
+.chat-answer--formatted pre {
+  max-width: 100%;
+  margin: 0.4em 0 1em;
+  padding: 0.8em 0.95em;
+  overflow-x: auto;
+  border: 1px solid rgb(255 255 255 / 22%);
+  background: rgb(255 255 255 / 7%);
+  white-space: pre;
+}
+
+.chat-answer--formatted pre code {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 0.82em;
+}
+
+body[data-character="Tom"] .chat-answer {
   animation: chat-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.chat-answer--error {
+  color: #ff6b6b;
+  font-size: 16px;
+  opacity: 0.9;
 }
 
 /* Figma: black cover + blue "not sure......" while AI revises */
@@ -536,40 +596,27 @@ body {
   }
 }
 
-/* Tom happy: wobbly dancing answer letters */
-.chat-answer--happy-dance .chat-answer__char--dance {
+/* Tom happy: each word rises and falls as a wave */
+.chat-answer--happy-dance .chat-answer__word--dance {
   display: inline-block;
   transform-origin: 50% 85%;
   will-change: transform;
-  animation: tom-answer-char-dance 0.58s ease-in-out infinite;
-  animation-delay: calc(var(--i) * -0.045s);
-  animation-duration: calc(0.5s + (var(--i) % 4) * 0.07s);
+  animation: tom-answer-word-wave 1.05s ease-in-out infinite;
+  animation-delay: calc(var(--i) * -0.11s);
 }
 
-@keyframes tom-answer-char-dance {
+@keyframes tom-answer-word-wave {
   0%,
   100% {
     transform: translateY(0) rotate(0deg);
   }
 
-  20% {
-    transform: translateY(-6px) rotate(-9deg);
-  }
-
-  40% {
-    transform: translateY(4px) rotate(8deg);
-  }
-
-  60% {
-    transform: translateY(-5px) rotate(-7deg);
-  }
-
-  80% {
-    transform: translateY(3px) rotate(6deg);
+  50% {
+    transform: translateY(-9px) rotate(-2deg);
   }
 }
 
-/* Tom sad: continuous bezier path layout */
+/* Tom sad: the straight answer progressively droops into an arc */
 .chat-answer--sad-arc {
   position: relative;
   display: block;
@@ -601,7 +648,7 @@ body {
   transform-origin: 0% 90%;
   white-space: pre;
   will-change: transform;
-  transition: transform 0.22s cubic-bezier(0.33, 1, 0.68, 1);
+  transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .chat-scrape-text {
@@ -737,6 +784,11 @@ body {
 }
 
 /* Rupin/Tom first screen: centered in the sideline → viewport lane */
+body[data-character="Rupin"],
+body[data-character="Tom"] {
+  --composer-font: 18px;
+}
+
 body[data-character="Rupin"] .chat-panel,
 body[data-character="Tom"] .chat-panel {
   animation: none;
@@ -772,7 +824,7 @@ body[data-character="Rupin"] .prompt__field input,
 body[data-character="Rupin"] .prompt__send,
 body[data-character="Tom"] .prompt__field input,
 body[data-character="Tom"] .prompt__send {
-  font-size: 18px;
+  font-size: var(--composer-font);
 }
 
 body[data-character="Rupin"] .prompt__send,
@@ -818,6 +870,7 @@ body.chat-started[data-character="Tom"] .chat-panel__composer--runaway.is-locked
 
 /* Potter: never create a transform containing block for fixed composer */
 body[data-character="Potter"] .chat-panel {
+  position: relative;
   animation: none;
   transform: none;
 }
@@ -838,6 +891,10 @@ body[data-character="Potter"] .chat-panel {
   transition: none;
 }
 
+body.chat-started {
+  --composer-font: 18px;
+}
+
 body.chat-started .prompt__field {
   min-height: 78px;
   padding: 9px 8px 9px 20px;
@@ -845,7 +902,7 @@ body.chat-started .prompt__field {
 
 body.chat-started .prompt__field input,
 body.chat-started .prompt__send {
-  font-size: 18px;
+  font-size: var(--composer-font);
 }
 
 body.chat-started .prompt__send {
@@ -856,9 +913,14 @@ body.chat-started .prompt__send {
   min-height: 61px;
 }
 
-body.chat-started .chat-panel__thread {
-  height: calc(100dvh - var(--composer-bottom) - var(--composer-dock-h));
-  max-height: calc(100dvh - var(--composer-bottom) - var(--composer-dock-h));
+body.chat-started[data-character="Rupin"] .chat-panel__thread,
+body.chat-started[data-character="Tom"] .chat-panel__thread {
+  padding-bottom: calc(
+    var(--composer-bottom) + var(--composer-dock-h) + 32px
+  );
+  scroll-padding-bottom: calc(
+    var(--composer-bottom) + var(--composer-dock-h) + 32px
+  );
 }
 
 body.chat-started .chat-panel__composer--runaway input,
@@ -1116,12 +1178,12 @@ body[data-tom-mood="tired"] .prompt__send--pet:hover {
   }
 }
 
-/* idle: soft breathe */
-body[data-tom-mood="idle"] .prompt__field {
-  animation: tom-idle-breathe 3.2s ease-in-out infinite;
+/* common: soft breathe */
+body[data-tom-mood="common"] .prompt__field {
+  animation: tom-common-breathe 3.2s ease-in-out infinite;
 }
 
-@keyframes tom-idle-breathe {
+@keyframes tom-common-breathe {
   0%,
   100% {
     transform: translateY(0);
@@ -1129,6 +1191,201 @@ body[data-tom-mood="idle"] .prompt__field {
   50% {
     transform: translateY(4px);
   }
+}
+
+/* Potter action-specific answer styles */
+.chat-answer--short {
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+
+.potter-short__char {
+  display: inline-block;
+  opacity: 0;
+  transform: translateX(-14px) skewX(-8deg);
+  filter: blur(1px);
+  animation: potter-short-char 0.12s steps(2) forwards;
+  animation-delay: calc(var(--i) * 34ms);
+}
+
+@keyframes potter-short-char {
+  0% {
+    opacity: 0;
+    transform: translateX(-14px) skewX(-8deg);
+    filter: blur(1px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) skewX(0deg);
+    filter: blur(0);
+  }
+}
+
+.chat-answer--hesitate {
+  position: relative;
+  min-height: 1.5em;
+  overflow: visible;
+}
+
+.potter-hesitate__char {
+  display: inline-block;
+  animation: potter-hesitate-drop 0.72s cubic-bezier(0.45, 0, 0.75, 1) forwards;
+  animation-delay: calc(var(--i) * 58ms);
+}
+
+@keyframes potter-hesitate-drop {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  55% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(34px) rotate(6deg);
+    opacity: 0.12;
+  }
+}
+
+.chat-answer--silence {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 1.4em;
+  padding: 4px 0;
+}
+
+.chat-answer.is-generating.chat-answer--loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 1.4em;
+  padding: 4px 0;
+}
+
+.chat-loading__dot,
+.potter-silence__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffffff;
+  opacity: 0.35;
+  animation: potter-silence-dot 0.9s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 0.18s);
+}
+
+@keyframes potter-silence-dot {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  40% {
+    transform: translateY(-7px);
+    opacity: 1;
+  }
+}
+
+.chat-answer--silence.is-fading {
+  animation: potter-silence-fade 0.42s ease forwards;
+}
+
+@keyframes potter-silence-fade {
+  to {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.chat-answer--withdraw {
+  color: rgb(255 255 255 / 72%);
+  letter-spacing: 0.02em;
+  animation: potter-withdraw-text 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes potter-withdraw-text {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.chat-answer--end {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(var(--chat-bubble-max-w), 100%);
+}
+
+.potter-end__farewell {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.potter-end__label {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  color: rgb(255 255 255 / 58%);
+}
+
+.chat-panel__conversation-end {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  z-index: 3;
+  margin: 0;
+  border: 0;
+  border-top: 2px solid rgb(255 255 255 / 42%);
+  pointer-events: none;
+  animation: potter-end-line 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes potter-end-line {
+  from {
+    opacity: 0;
+    transform: scaleX(0.2);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+body[data-character="Potter"] .chat-panel__composer.is-withdraw-shift,
+body[data-character="Potter"]
+  .chat-panel__composer--runaway.is-catch-locked.is-withdraw-shift {
+  transition:
+    left 0.75s cubic-bezier(0.22, 1, 0.36, 1),
+    top 0.75s cubic-bezier(0.22, 1, 0.36, 1) !important;
+  transform: none !important;
+  left: calc(var(--catch-x, 0px) + var(--withdraw-offset, 0px)) !important;
+  pointer-events: auto !important;
+}
+
+body[data-character="Potter"] .chat-panel__composer.is-withdraw-nudge,
+body[data-character="Potter"]
+  .chat-panel__composer--runaway.is-catch-locked.is-withdraw-nudge {
+  transition:
+    left 0.18s cubic-bezier(0.34, 1.25, 0.64, 1) !important;
+}
+
+body[data-character="Potter"] .chat-panel__composer.is-withdraw-pop,
+body[data-character="Potter"]
+  .chat-panel__composer--runaway.is-catch-locked.is-withdraw-pop {
+  transition:
+    left 0.32s cubic-bezier(0.34, 1.45, 0.64, 1) !important;
+  left: var(--catch-x, 0px) !important;
+  transform: none !important;
 }
 
 /* Potter: low-score penalty — diagonal nudge while typing */

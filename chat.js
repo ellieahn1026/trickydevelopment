@@ -1,8 +1,19 @@
 import { DEFAULT_HEADLINE } from "./headline-type.js";
-import { appendRandomArchiveEntry } from "./archive-type.js";
-import { getTomHeadline, getTomMood, getTomSendLabel, handleTomPet } from "./tom-mood.js";
-import { applyTomAnswerMood, isTomSadAnswerTyping, typeTomSadAnswer } from "./tom-answer-mood.js";
-import { evaluateSubmittedMessage } from "./runaway-input.js";
+import {
+  applyMood,
+  getTomHeadline,
+  getTomMood,
+  getTomSendLabel,
+  handleTomPet,
+} from "./tom-mood.js";
+import { applyTomAnswerMood } from "./tom-answer-mood.js";
+import { evaluateSubmittedMessage, startConversationEndRunaway } from "./runaway-input.js";
+import {
+  clearPotterWithdrawShift,
+  clearConversationEndDivider,
+  renderPotterActionAnswer,
+  WITHDRAW_LABEL,
+} from "./potter-action-ui.js";
 import {
   prepareAnswerTextForScrape,
   scrapeFallPhrase,
@@ -16,49 +27,8 @@ const headline = document.getElementById("chat-headline");
 const composer = document.getElementById("chat-composer");
 const sendButton = form?.querySelector(".prompt__send");
 
-const replies = {
-  Potter: [
-    {
-      text: "Another person who's miserable because of their boss. Can't say I'm surprised. Humans build organizations, organizations create managers, and managers create meetings. It's an impressively efficient way to manufacture problems.",
-    },
-    {
-      text: "Interesting. I'll keep it short — and slightly wrong on purpose.",
-    },
-  ],
-  Rupin: [
-    {
-      text: "I was going to rank them by popularity. That felt too predictable. Popularity is just loud agreement. Maybe I should rank them by how long I kept thinking about them. No. Actually... the one that annoyed me the most probably deserves to stay near the top. Wait. I forgot what I was optimizing for. Importance? Interest? Regret? Those are almost the same thing. Not really. IU is staying. Not because she's objectively the best. Because I didn't argue with myself while thinking about her. That feels suspicious. Moving her lower.",
-      reviseFrom:
-        "IU is staying. Not because she's objectively the best. Because I didn't argue with myself while thinking about her.",
-      reviseTo:
-        "IU was staying — I take that back. I argued with myself the whole time.",
-    },
-    {
-      text: "You're pushing again. Fine — I'll keep going, but don't expect the same certainty. Ranking still feels wrong. Maybe the order was never the point. Maybe I just wanted you to notice I was guessing.",
-      reviseFrom: "don't expect the same certainty",
-      reviseIgnore: true,
-    },
-    {
-      text: "That question assumes I care. Bold. But fine — I'll answer anyway, even though you didn't earn a long one. Humans build organizations, organizations create managers, and managers create meetings. It's an impressively efficient way to manufacture problems nobody asked for, then act surprised when everyone is tired.",
-      reviseFrom: "assumes I care",
-      reviseTo: "assumes I owe you an answer",
-    },
-  ],
-  Tom: [
-    {
-      text: "Another person who's miserable because of their boss. Can't say I'm surprised. Humans build organizations, organizations create managers, and managers create meetings. It's an impressively efficient way to manufacture problems nobody asked for, then act surprised when everyone is tired.",
-    },
-    {
-      text: "Logged. Don't expect comfort. Expect a useful contradiction.",
-    },
-    {
-      text: "Noted. The answer exists. Whether you like it is optional.",
-    },
-    {
-      text: "Fine. I'll answer anyway. Short version: organizations exist. Long version: humans invented hierarchy, hierarchy invented meetings, and meetings invented suffering. By line three the sentence loses the will to stay upright, and by line four the words begin to slide down the page together.",
-    },
-  ],
-};
+/** @type {Record<string, string>} */
+const previousResponseIds = {};
 
 const THINKING_HEADLINE = "Thinking...";
 
@@ -75,9 +45,9 @@ const ERASE_HOLD_MS = 400;
 const ERASE_CHAR_MS = 28;
 const IGNORE_LABEL = "Hey, ignore.";
 const DOUBT_CHANCE = 0.85;
+const RESPONSE_MOODS = new Set(["happy", "sad", "common"]);
 
-let replyIndex = 0;
-/** @type {{ el: HTMLElement, text: string, reviseFrom?: string, reviseTo?: string, reviseIgnore?: boolean, revised: boolean }[]} */
+/** @type {{ el: HTMLElement, text: string, mood?: "happy" | "sad" | "common", reviseFrom?: string, reviseTo?: string, reviseIgnore?: boolean, revised: boolean }[]} */
 const answerHistory = [];
 
 let generationToken = 0;
@@ -85,7 +55,64 @@ let isGenerating = false;
 let savedSendLabel = "Send";
 let typingTimer = 0;
 let thinkingTimer = 0;
-let pendingReplyIndexRollback = false;
+/** @type {AbortController | null} */
+let fetchController = null;
+
+/** @type {unknown | undefined} */
+let potterAgentState;
+
+/** @type {{ role: "user" | "assistant"; content: string }[]} */
+const potterMessages = [];
+
+const INITIAL_POTTER_AGENT_STATE = {
+  willingness: 0.7,
+  fatigue: 0.2,
+  interest: 0.55,
+  distance: 0.25,
+  conversationOpen: true,
+  turnCount: 0,
+  lastAction: "respond",
+};
+
+function resetPotterAgentState() {
+  potterAgentState = { ...INITIAL_POTTER_AGENT_STATE };
+}
+
+function handlePotterConversationEnd(answer) {
+  startConversationEndRunaway(() => {
+    resetPotterAgentState();
+    clearConversationEndDivider(document.querySelector(".chat-panel"));
+    clearPotterWithdrawShift(composer);
+    if (answer.text?.trim()) {
+      potterMessages.push({
+        kind: "behavior",
+        action: "end",
+        note: answer.text.trim().slice(0, 200),
+      });
+    }
+    document.body.classList.add("composer-locked");
+    composer?.classList.add("is-locked", "is-catch-locked");
+    restoreHeadlineAfterGeneration();
+    focusInputIfEnabled();
+  });
+}
+
+function logPotterAgentState(result) {
+  if (character !== "Potter") return;
+  if (!result || typeof result !== "object") return;
+
+  console.log("[potter agent]", {
+    action: result.action,
+    evaluation: result.evaluation,
+    state: result.state,
+  });
+
+  window.__POTTER_AGENT__ = {
+    action: result.action,
+    evaluation: result.evaluation,
+    state: result.state,
+  };
+}
 
 function getRestoredSendLabel() {
   if (character === "Tom") {
@@ -148,15 +175,12 @@ function cancelGeneration() {
   if (!isGenerating) return;
 
   generationToken += 1;
+  fetchController?.abort();
+  fetchController = null;
   clearGenerationTimers();
   setGenerating(false);
 
   thread.querySelector(".chat-answer.is-generating")?.remove();
-
-  if (pendingReplyIndexRollback) {
-    replyIndex -= 1;
-    pendingReplyIndexRollback = false;
-  }
 
   restoreHeadlineAfterGeneration();
   focusInputIfEnabled();
@@ -227,6 +251,145 @@ function appendQuestion(text) {
   thread.appendChild(el);
   scrollThreadToLatest();
   return el;
+}
+
+function mountAnswerLoadingDots(el) {
+  el.replaceChildren();
+  el.classList.add("chat-answer--loading");
+  for (let index = 0; index < 3; index += 1) {
+    const dot = document.createElement("span");
+    dot.className = "chat-loading__dot";
+    dot.style.setProperty("--i", String(index));
+    el.appendChild(dot);
+  }
+}
+
+function clearAnswerLoadingState(el) {
+  el.classList.remove("chat-answer--loading");
+}
+
+function appendInlineMarkdown(target, text) {
+  const pattern = /(\*\*[^*\n]+\*\*|`[^`\n]+`)/g;
+  let cursor = 0;
+
+  for (const match of text.matchAll(pattern)) {
+    const index = match.index ?? 0;
+    target.append(document.createTextNode(text.slice(cursor, index)));
+
+    const token = match[0];
+    const node = document.createElement(token.startsWith("**") ? "strong" : "code");
+    node.textContent = token.startsWith("**")
+      ? token.slice(2, -2)
+      : token.slice(1, -1);
+    target.appendChild(node);
+    cursor = index + token.length;
+  }
+
+  target.append(document.createTextNode(text.slice(cursor)));
+}
+
+function renderAnswerMarkdown(el, text) {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  const fragment = document.createDocumentFragment();
+  let paragraphLines = [];
+  let list = null;
+  let codeLines = null;
+  let codeLanguage = "";
+
+  const flushParagraph = () => {
+    if (!paragraphLines.length) return;
+    const paragraph = document.createElement("p");
+    appendInlineMarkdown(paragraph, paragraphLines.join("\n"));
+    fragment.appendChild(paragraph);
+    paragraphLines = [];
+  };
+
+  const closeList = () => {
+    list = null;
+  };
+
+  lines.forEach((line) => {
+    const fence = line.match(/^\s*```\s*([\w-]*)\s*$/);
+    if (fence) {
+      flushParagraph();
+      closeList();
+
+      if (codeLines) {
+        const pre = document.createElement("pre");
+        const code = document.createElement("code");
+        if (codeLanguage) code.dataset.language = codeLanguage;
+        code.textContent = codeLines.join("\n");
+        pre.appendChild(code);
+        fragment.appendChild(pre);
+        codeLines = null;
+        codeLanguage = "";
+      } else {
+        codeLines = [];
+        codeLanguage = fence[1];
+      }
+      return;
+    }
+
+    if (codeLines) {
+      codeLines.push(line);
+      return;
+    }
+
+    if (!line.trim()) {
+      flushParagraph();
+      closeList();
+      return;
+    }
+
+    if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      flushParagraph();
+      closeList();
+      fragment.appendChild(document.createElement("hr"));
+      return;
+    }
+
+    const heading = line.match(/^\s*(#{1,3})\s+(.+)$/);
+    if (heading) {
+      flushParagraph();
+      closeList();
+      const node = document.createElement(`h${heading[1].length + 2}`);
+      appendInlineMarkdown(node, heading[2]);
+      fragment.appendChild(node);
+      return;
+    }
+
+    const item = line.match(/^\s*(?:([-*+])|(\d+)[.)])\s+(.+)$/);
+    if (item) {
+      flushParagraph();
+      const tag = item[2] ? "ol" : "ul";
+      if (!list || list.tagName.toLowerCase() !== tag) {
+        list = document.createElement(tag);
+        fragment.appendChild(list);
+      }
+      const listItem = document.createElement("li");
+      appendInlineMarkdown(listItem, item[3]);
+      list.appendChild(listItem);
+      return;
+    }
+
+    closeList();
+    paragraphLines.push(line);
+  });
+
+  if (codeLines) {
+    paragraphLines.push(`\`\`\`${codeLanguage}`, ...codeLines);
+  }
+  flushParagraph();
+
+  el.classList.add("chat-answer--formatted");
+  el.replaceChildren(fragment);
+}
+
+function hasStructuredAnswer(text) {
+  return (
+    text.includes("\n") ||
+    /^\s*(?:#{1,3}\s+|[-*+]\s+|\d+[.)]\s+|```)/m.test(text)
+  );
 }
 
 function typeText(target, text, speed = TYPE_MS, token = generationToken) {
@@ -338,7 +501,7 @@ function splitAnswerAround(el, text, span) {
 }
 
 /** Show the full answer first — no censor yet. */
-async function appendAnswer(reply, token = generationToken) {
+async function appendAnswer(reply, token = generationToken, answerMood = null) {
   const el = document.createElement("div");
   el.className = "chat-answer is-generating";
   thread.appendChild(el);
@@ -346,18 +509,7 @@ async function appendAnswer(reply, token = generationToken) {
   const fullText = typeof reply === "string" ? reply : reply.text;
 
   try {
-    if (isTomSadAnswerTyping()) {
-      await typeTomSadAnswer(el, fullText, TYPE_MS, token, {
-        isCancelled,
-        onScroll: scrollThreadToLatest,
-        onTimer: (id) => {
-          window.clearTimeout(typingTimer);
-          typingTimer = id;
-        },
-      });
-    } else {
-      await typeText(el, fullText, TYPE_MS, token);
-    }
+    await typeText(el, fullText, TYPE_MS, token);
   } catch (error) {
     el.remove();
     throw error;
@@ -365,8 +517,16 @@ async function appendAnswer(reply, token = generationToken) {
 
   el.classList.remove("is-generating");
 
-  if (character === "Tom") {
-    applyTomAnswerMood(el, fullText);
+  const isStructured = hasStructuredAnswer(fullText);
+  if (
+    character === "Tom" &&
+    !isStructured &&
+    answerMood &&
+    answerMood !== "common"
+  ) {
+    applyTomAnswerMood(el, fullText, answerMood);
+  } else {
+    renderAnswerMarkdown(el, fullText);
   }
 
   answerHistory.push({
@@ -571,33 +731,424 @@ async function appendAnswerWithInterleavedRevision(reply, token = generationToke
   return el;
 }
 
-function startAnswerGeneration({ isPushback, answer, token }) {
-  thinkingTimer = window.setTimeout(async () => {
-    try {
-      if (isCancelled(token)) return;
+function parseServerSentEvent(block) {
+  const data = block
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart())
+    .join("\n");
 
-      if (isPushback && character === "Rupin") {
-        await appendAnswerWithInterleavedRevision(answer, token);
-      } else {
-        await appendAnswer(answer, token);
-      }
-      pendingReplyIndexRollback = false;
-      appendRandomArchiveEntry();
-      restoreHeadlineAfterGeneration();
-      scrollThreadToLatest();
-      focusInputIfEnabled();
-    } catch (error) {
-      if (error?.name === "AbortError") return;
-      throw error;
-    } finally {
-      if (!isCancelled(token)) {
-        setGenerating(false);
-      }
-    }
-  }, 450);
+  if (!data || data === "[DONE]") return null;
+  return JSON.parse(data);
 }
 
-form.addEventListener("submit", (event) => {
+function stripMoodLabel(text, isPartial = false) {
+  const cleaned = text.replace(
+    /^\s*mood\s*:\s*(?:happy|sad|common)\s*/i,
+    "",
+  );
+
+  if (cleaned !== text) {
+    return cleaned;
+  }
+
+  if (isPartial) {
+    const candidate = text.trimStart().toLowerCase();
+    const moodLabels = ["mood: happy", "mood: sad", "mood: common"];
+    if (candidate && moodLabels.some((label) => label.startsWith(candidate))) {
+      return "";
+    }
+  }
+
+  return text;
+}
+
+function createRetryableChatError(message, reason) {
+  return Object.assign(new Error(message), {
+    retryable: true,
+    reason,
+  });
+}
+
+function extractPartialAnswer(rawJson) {
+  const match = /"answer"\s*:\s*"/.exec(rawJson);
+  if (!match) return "";
+
+  const start = match.index + match[0].length;
+  let rawValue = "";
+  let escaped = false;
+
+  for (let index = start; index < rawJson.length; index += 1) {
+    const char = rawJson[index];
+
+    if (escaped) {
+      rawValue += char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      rawValue += char;
+      escaped = true;
+      continue;
+    }
+
+    if (char === '"') {
+      break;
+    }
+
+    rawValue += char;
+  }
+
+  if (escaped) {
+    rawValue = rawValue.slice(0, -1);
+  }
+
+  try {
+    return stripMoodLabel(JSON.parse(`"${rawValue}"`), true);
+  } catch {
+    return null;
+  }
+}
+
+function parseStructuredChatAnswer(rawJson) {
+  let result;
+
+  try {
+    result = JSON.parse(rawJson);
+  } catch {
+    throw createRetryableChatError(
+      "Chat response was not valid structured JSON.",
+      "invalid_structured_json",
+    );
+  }
+
+  if (
+    !result ||
+    typeof result.answer !== "string" ||
+    !RESPONSE_MOODS.has(result.mood)
+  ) {
+    throw createRetryableChatError(
+      "Chat response did not match the required mood schema.",
+      "invalid_mood_schema",
+    );
+  }
+
+  return {
+    text: stripMoodLabel(result.answer),
+    mood: result.mood,
+  };
+}
+
+async function fetchChatReply(message, token, onDelta) {
+  fetchController?.abort();
+  fetchController = new AbortController();
+
+  const requestBody =
+    character === "Potter"
+      ? {
+          character,
+          message,
+          messages: potterMessages,
+          agentState: potterAgentState,
+        }
+      : {
+          character,
+          message,
+          previousResponseId: previousResponseIds[character],
+        };
+
+  const response = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(requestBody),
+    signal: fetchController.signal,
+  });
+
+  if (isCancelled(token)) {
+    throw new DOMException("Aborted", "AbortError");
+  }
+
+  if (!response.ok) {
+    const raw = await response.text();
+    let payload = null;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      // Keep the original server text when the response is not JSON.
+    }
+    const message = payload?.error || raw || "Chat request failed.";
+    if (response.status === 429 || response.status >= 500) {
+      throw createRetryableChatError(message, `http_${response.status}`);
+    }
+    throw new Error(message);
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  const isPotterJsonResponse =
+    character === "Potter" && !contentType.includes("text/event-stream");
+
+  if (isPotterJsonResponse || contentType.includes("application/json")) {
+    const result = await response.json();
+    logPotterAgentState(result);
+
+    if (character === "Potter") {
+      potterAgentState = result.state;
+      potterMessages.push({ role: "user", content: message });
+      if (typeof result.text === "string" && result.text.trim()) {
+        potterMessages.push({ role: "assistant", content: result.text });
+      } else if (result.action === "silence") {
+        potterMessages.push({ kind: "behavior", action: "silence" });
+      }
+    }
+
+    return {
+      text: typeof result.text === "string" ? result.text : "",
+      mood: "common",
+      action: result.action,
+      state: result.state,
+    };
+  }
+
+  if (!response.body) {
+    throw new Error("Chat response stream was empty.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  let responseId = "";
+  let completed = false;
+
+  const handleEvent = (block) => {
+    const payload = parseServerSentEvent(block);
+    if (!payload) return;
+
+    if (payload.type === "response.output_text.delta" && payload.delta) {
+      text += payload.delta;
+      onDelta?.(payload.delta, extractPartialAnswer(text));
+      return;
+    }
+
+    if (payload.type === "response.created" && payload.response?.id) {
+      responseId = payload.response.id;
+      return;
+    }
+
+    if (payload.type === "response.completed") {
+      responseId = payload.response?.id || responseId;
+      completed = true;
+      return;
+    }
+
+    if (payload.type === "response.incomplete") {
+      const reason =
+        payload.response?.incomplete_details?.reason || "unknown_reason";
+      console.warn("[chat] response incomplete", {
+        character,
+        reason,
+      });
+      throw createRetryableChatError(
+        `Chat response was incomplete: ${reason}`,
+        reason,
+      );
+    }
+
+    if (payload.type === "error" || payload.type === "response.failed") {
+      throw new Error(
+        payload.error?.message ||
+          payload.response?.error?.message ||
+          "Chat stream failed.",
+      );
+    }
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+
+    const blocks = buffer.split(/\r?\n\r?\n/);
+    buffer = blocks.pop() || "";
+    blocks.forEach(handleEvent);
+
+    if (done) break;
+    if (isCancelled(token)) {
+      await reader.cancel();
+      throw new DOMException("Aborted", "AbortError");
+    }
+  }
+
+  if (buffer.trim()) {
+    handleEvent(buffer);
+  }
+
+  if (!completed) {
+    throw createRetryableChatError(
+      "Chat response stream ended before completion.",
+      "stream_interrupted",
+    );
+  }
+
+  if (!text.trim()) {
+    throw new Error("Chat response was empty.");
+  }
+
+  const answer = parseStructuredChatAnswer(text);
+
+  if (responseId) {
+    previousResponseIds[character] = responseId;
+  }
+
+  return answer;
+}
+
+async function fetchChatReplyWithRetry(message, token, onDelta, onRetry) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await fetchChatReply(message, token, onDelta);
+    } catch (error) {
+      const retryable =
+        error?.retryable === true || error instanceof TypeError;
+
+      if (!retryable || attempt === 1 || isCancelled(token)) {
+        throw error;
+      }
+
+      console.warn("[chat] retrying response", {
+        character,
+        attempt: attempt + 2,
+        reason: error?.reason || "network_error",
+      });
+      onRetry?.();
+    }
+  }
+
+  throw new Error("Chat request failed after retry.");
+}
+
+function appendErrorAnswer(message) {
+  const el = document.createElement("div");
+  el.className = "chat-answer chat-answer--error";
+  el.textContent = message;
+  thread.appendChild(el);
+  scrollThreadToLatest();
+}
+
+async function appendStreamingAnswer(
+  message,
+  token,
+  isPushback,
+) {
+  const el = document.createElement("div");
+  el.className = "chat-answer is-generating";
+  thread.appendChild(el);
+  mountAnswerLoadingDots(el);
+  scrollThreadToLatest();
+
+  try {
+    const answer = await fetchChatReplyWithRetry(
+      message,
+      token,
+      (_delta, partialAnswer) => {
+        if (partialAnswer == null) return;
+        clearAnswerLoadingState(el);
+        el.textContent = partialAnswer;
+        scrollThreadToLatest();
+      },
+      () => {
+        mountAnswerLoadingDots(el);
+      },
+    );
+
+    clearAnswerLoadingState(el);
+    el.classList.remove("is-generating");
+
+    if (character === "Potter" && answer.action && answer.action !== "respond") {
+      await renderPotterActionAnswer({
+        el,
+        action: answer.action,
+        text: answer.text,
+        composer,
+        chatPanel: document.querySelector(".chat-panel"),
+        isCancelled: () => isCancelled(token),
+        onScroll: scrollThreadToLatest,
+      });
+
+      if (answer.action === "silence") {
+        return { el, conversationEnded: false };
+      }
+
+      const recordText =
+        answer.action === "withdraw"
+          ? answer.text?.trim() || WITHDRAW_LABEL
+          : answer.action === "end"
+            ? answer.text || "conversation end."
+            : answer.text;
+
+      answerHistory.push({
+        el,
+        text: recordText,
+        mood: "common",
+        revised: false,
+      });
+
+      if (answer.action === "end") {
+        handlePotterConversationEnd(answer);
+        return { el, conversationEnded: true };
+      }
+
+      return { el, conversationEnded: false };
+    }
+
+    el.textContent = answer.text;
+
+    const answerMood = answer.mood;
+    el.dataset.answerMood = answerMood;
+    const isStructured = hasStructuredAnswer(answer.text);
+
+    if (character === "Tom") {
+      applyMood(answerMood);
+      if (!isStructured) {
+        applyTomAnswerMood(el, answer.text, answerMood);
+      }
+    }
+
+    if (character !== "Tom" || isStructured || answerMood === "common") {
+      renderAnswerMarkdown(el, answer.text);
+    }
+
+    console.info("[chat] answer mood assigned", {
+      character,
+      mood: answerMood,
+      uiMood:
+        character === "Tom" ? document.body.dataset.tomMood ?? null : null,
+    });
+
+    if (isPushback && character === "Rupin") {
+      const prev = [...answerHistory].reverse().find((entry) => !entry.revised);
+      if (prev) {
+        prev.el.classList.add("is-doubting");
+        await rupinRoughEraseAndRevise(prev, token);
+        prev.el.classList.remove("is-doubting");
+      }
+    }
+
+    answerHistory.push({
+      el,
+      text: answer.text,
+      mood: answerMood,
+      revised: false,
+    });
+
+    return { el, conversationEnded: false };
+  } catch (error) {
+    el.remove();
+    throw error;
+  }
+}
+
+form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   if (isGenerating) {
@@ -616,6 +1167,10 @@ form.addEventListener("submit", (event) => {
     return;
   }
 
+  if (character === "Potter") {
+    clearPotterWithdrawShift(composer);
+  }
+
   const isPushback = answerHistory.length > 0;
 
   dockComposer();
@@ -623,28 +1178,47 @@ form.addEventListener("submit", (event) => {
   input.value = "";
   setThinkingHeadline();
 
-  const pool = replies[character] || replies.Potter;
-  const answer = pool[replyIndex % pool.length];
-  replyIndex += 1;
-  pendingReplyIndexRollback = true;
-
   const token = ++generationToken;
   setGenerating(true);
 
-  const generationPayload = { isPushback, answer, token };
+  const runGeneration = async () => {
+    try {
+      if (isCancelled(token)) return;
+      const result = await appendStreamingAnswer(message, token, isPushback);
+      if (!result.conversationEnded) {
+        restoreHeadlineAfterGeneration();
+        focusInputIfEnabled();
+      }
+      scrollThreadToLatest();
+    } catch (error) {
+      if (error?.name === "AbortError") return;
+
+      appendErrorAnswer(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong. Try again.",
+      );
+      restoreHeadlineAfterGeneration();
+      focusInputIfEnabled();
+    } finally {
+      if (!isCancelled(token)) {
+        setGenerating(false);
+        fetchController = null;
+      }
+    }
+  };
 
   const penalty = evaluateSubmittedMessage(message, () => {
     setThinkingHeadline();
     setGenerating(true);
-    startAnswerGeneration(generationPayload);
+    void runGeneration();
   });
 
   if (penalty.deferred) {
     setGenerating(false);
-    pendingReplyIndexRollback = false;
     restoreHeadlineAfterGeneration();
     return;
   }
 
-  startAnswerGeneration(generationPayload);
+  await runGeneration();
 });
