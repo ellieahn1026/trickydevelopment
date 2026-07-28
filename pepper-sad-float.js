@@ -16,8 +16,8 @@ let currentLift = 0;
 let floatPhase = 0;
 let motionRaf = 0;
 
-function isTomPage() {
-  return document.body.dataset.character === "Tom";
+function isPepperPage() {
+  return document.body.dataset.character === "Pepper";
 }
 
 function tiltForLength(length) {
@@ -104,7 +104,7 @@ function clearFieldMotion() {
 }
 
 function enableSadFloat() {
-  if (!isTomPage() || active) return;
+  if (!isPepperPage() || active) return;
 
   field = document.querySelector("#chat-form .prompt__field");
   input = document.getElementById("chat-input");
@@ -137,8 +137,8 @@ function disableSadFloat() {
   currentLift = 0;
 }
 
-function syncTomSadFloat(isSad) {
-  if (!isTomPage()) return;
+function syncPepperSadFloat(isSad) {
+  if (!isPepperPage()) return;
   if (isSad) {
     enableSadFloat();
     return;
@@ -146,4 +146,4 @@ function syncTomSadFloat(isSad) {
   disableSadFloat();
 }
 
-export { syncTomSadFloat };
+export { syncPepperSadFloat };

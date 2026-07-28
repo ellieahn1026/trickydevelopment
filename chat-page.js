@@ -1,41 +1,90 @@
+const BTN_SIZE = 97;
+
 const CHARACTERS = [
   {
     name: "Potter",
-    color: "#ff399f",
-    colorActive: "#ff0015",
+    color: "#ff46ff",
+    colorActive: "#ff46ff",
+    colorHover: "#ed23ed",
+    icon: "./assets/icons/potter.svg",
+    iconSpeaking: "./assets/icons/potter-speaking.svg",
     href: "./index.html",
   },
   {
     name: "Rupin",
-    color: "#ff5e00",
-    colorActive: "#e1ff00",
+    color: "#2edbf0",
+    colorActive: "#2edbf0",
+    colorHover: "#00c7df",
+    icon: "./assets/icons/rupin.svg",
     href: "./rupin.html",
   },
   {
-    name: "Tom",
-    color: "#54fe54",
-    colorActive: "#00ffe1",
-    href: "./tom.html",
+    name: "Pepper",
+    color: "#4CFF4F",
+    colorActive: "#4CFF4F",
+    colorHover: "#2DE731",
+    icon: "./assets/icons/tom.svg",
+    href: "./pepper.html",
+    extraLink: {
+      name: "F1",
+      label: "F1",
+      href: "./f1.html",
+      color: "#ff670f",
+      colorActive: "#ff670f",
+      colorHover: "#ea5600",
+      icon: "./assets/icons/tom.svg",
+    },
   },
 ];
 
 function characterButtons(activeName) {
-  return CHARACTERS.map(
-    (c) => `
+  return CHARACTERS.map((c) => {
+    const isActive = c.name === activeName;
+    const extraActive = c.extraLink?.name === activeName;
+
+    const button = `
           <button
             type="button"
-            class="character${c.name === activeName ? " is-active" : ""}"
+            class="character${isActive ? " is-active" : ""}"
             data-name="${c.name}"
             data-color="${c.color}"
             data-color-active="${c.colorActive}"
+            data-color-hover="${c.colorHover}"
             data-href="${c.href}"
-            aria-pressed="${c.name === activeName ? "true" : "false"}"
+            aria-pressed="${isActive ? "true" : "false"}"
             aria-label="Open ${c.name} chat"
           >
-            <span class="character__swatch" style="--swatch: ${c.color}; --swatch-active: ${c.colorActive}"></span>
+            <span class="character__swatch" style="--swatch: ${c.color}; --swatch-active: ${c.colorActive}; --swatch-hover: ${c.colorHover}">
+              <img class="character__icon character__icon--default" src="${c.icon}" alt="" width="${BTN_SIZE}" height="${BTN_SIZE}" decoding="async" />
+              ${
+                c.iconSpeaking
+                  ? `<img class="character__icon character__icon--speaking" src="${c.iconSpeaking}" alt="" width="${BTN_SIZE}" height="${BTN_SIZE}" decoding="async" aria-hidden="true" />`
+                  : ""
+              }
+            </span>
             <span class="character__label">${c.name}</span>
-          </button>`,
-  ).join("");
+          </button>`;
+
+    if (!c.extraLink) {
+      return button;
+    }
+
+    return `
+          <div class="character-group">
+            ${button}
+            <a
+              class="character character--f1${extraActive ? " is-active" : ""}"
+              href="${c.extraLink.href}"
+              aria-current="${extraActive ? "page" : "false"}"
+              aria-label="Open F1 chat"
+            >
+              <span class="character__swatch" style="--swatch: ${c.extraLink.color}; --swatch-active: ${c.extraLink.colorActive}; --swatch-hover: ${c.extraLink.colorHover}">
+                <img class="character__icon character__icon--default" src="${c.extraLink.icon}" alt="" width="${BTN_SIZE}" height="${BTN_SIZE}" decoding="async" />
+              </span>
+              <span class="character__label">${c.extraLink.label}</span>
+            </a>
+          </div>`;
+  }).join("");
 }
 
 function chatPage({
@@ -56,7 +105,7 @@ function chatPage({
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;600;700&family=Datatype:wght@400;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;600;700&family=Xanh+Mono&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./orbit-kr.css" />
@@ -68,6 +117,11 @@ function chatPage({
         <svg class="composer-trail" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
           <path class="composer-trail__path" />
         </svg>
+        ${
+          activeName === "F1"
+            ? `<div class="f1-hourglass" aria-hidden="true"></div>`
+            : ""
+        }
         <header class="brand">
           <a href="./index.html"><h1>hackedGPT</h1></a>
         </header>
@@ -75,6 +129,16 @@ function chatPage({
         <nav class="characters" aria-label="Characters">
           ${characterButtons(activeName)}
         </nav>
+
+        <div class="user-badge-zone">
+          <div class="user-badge__rule" aria-hidden="true"></div>
+          <div class="user-badge" aria-label="User profile">
+            <span class="user-badge__avatar" aria-hidden="true">
+              <span class="user-badge__initial" id="user-initial">E</span>
+            </span>
+            <span class="user-badge__name" id="user-display-name">Ellie</span>
+          </div>
+        </div>
 
         <div class="sideline" aria-hidden="true"></div>
 
@@ -101,6 +165,7 @@ function chatPage({
     </div>
 
     <script type="module" src="./nav.js"></script>
+    <script type="module" src="./user-badge.js"></script>
     <script type="module" src="./runaway-input.js"></script>
     <script type="module" src="./chat.js"></script>
   </body>

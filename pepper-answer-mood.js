@@ -1,4 +1,4 @@
-import { getTomMood } from "./tom-mood.js";
+import { getPepperMood } from "./pepper-mood.js";
 
 const LINE_HEIGHT = 26;
 
@@ -208,8 +208,8 @@ function animateSadArc(el, text) {
   });
 }
 
-function applyTomAnswerMood(el, text, mood = getTomMood()) {
-  if (document.body.dataset.character !== "Tom") {
+function applyPepperAnswerMood(el, text, mood = getPepperMood()) {
+  if (document.body.dataset.character !== "Pepper") {
     return;
   }
 
@@ -220,4 +220,4 @@ function applyTomAnswerMood(el, text, mood = getTomMood()) {
   }
 }
 
-export { applyTomAnswerMood };
+export { applyPepperAnswerMood };

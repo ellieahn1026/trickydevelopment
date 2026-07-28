@@ -1,0 +1,47 @@
+<svg width="483" height="816" viewBox="0 0 483 816" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="111.272" y="148.363" width="37.0909" height="37.0909" fill="#F8650F"/>
+<rect x="185.454" y="148.363" width="37.0909" height="37.0909" fill="#F8650F"/>
+<rect x="259.637" y="148.363" width="37.0909" height="37.0909" fill="#F8650F"/>
+<rect x="333.818" y="148.363" width="37.0909" height="37.0909" fill="#F8650F"/>
+<rect x="148.363" y="185.454" width="37.0909" height="37.0909" fill="#F8650F"/>
+<rect x="222.546" y="185.454" width="37.0909" height="37.0909" fill="#F8650F"/>
+<rect x="296.728" y="185.454" width="37.0909" height="37.0909" fill="#F8650F"/>
+<rect x="185.454" y="222.546" width="37.0909" height="37.0909" fill="#F8650F"/>
+<rect x="259.637" y="222.546" width="37.0909" height="37.0909" fill="#F8650F"/>
+<rect x="222.546" y="259.637" width="37.0909" height="37.0909" fill="#F8650F"/>
+<rect width="482.182" height="37.0909" fill="#F8650F"/>
+<rect y="37.0908" width="78.8182" height="37.0909" fill="#F8650F"/>
+<rect x="403.363" y="37.0908" width="78.8182" height="37.0909" fill="#F8650F"/>
+<rect x="37.0908" y="111.272" width="37.0909" height="185.455" fill="#F8650F"/>
+<rect x="74.1816" y="259.637" width="37.0909" height="37.0909" fill="#F8650F"/>
+<rect x="74.1816" y="296.728" width="37.0909" height="37.0909" fill="#F8650F"/>
+<rect x="111.272" y="296.728" width="37.0909" height="37.0909" fill="#F8650F"/>
+<rect x="111.272" y="333.818" width="37.0909" height="37.0909" fill="#F8650F"/>
+<rect x="148.363" y="333.818" width="37.0909" height="37.0909" fill="#F8650F"/>
+<rect x="148.363" y="370.909" width="74.1818" height="74.1818" fill="#F8650F"/>
+<rect width="37.0909" height="185.455" transform="matrix(-1 0 0 1 445.091 111.272)" fill="#F8650F"/>
+<rect width="37.0909" height="37.0909" transform="matrix(-1 0 0 1 408 259.637)" fill="#F8650F"/>
+<rect width="37.0909" height="37.0909" transform="matrix(-1 0 0 1 408 296.728)" fill="#F8650F"/>
+<rect width="37.0909" height="37.0909" transform="matrix(-1 0 0 1 370.909 296.728)" fill="#F8650F"/>
+<rect width="37.0909" height="37.0909" transform="matrix(-1 0 0 1 370.909 333.818)" fill="#F8650F"/>
+<rect width="37.0909" height="37.0909" transform="matrix(-1 0 0 1 333.818 333.818)" fill="#F8650F"/>
+<rect width="74.1818" height="74.1818" transform="matrix(-1 0 0 1 333.818 370.909)" fill="#F8650F"/>
+<rect x="222.546" y="333.818" width="37.0909" height="37.0909" fill="#F8650F"/>
+<rect y="74.1816" width="482.182" height="37.0909" fill="#F8650F"/>
+<rect width="482.182" height="37.0909" transform="matrix(1 0 0 -1 0 816)" fill="#F8650F"/>
+<rect width="78.8182" height="37.0909" transform="matrix(1 0 0 -1 0 778.909)" fill="#F8650F"/>
+<rect width="78.8182" height="37.0909" transform="matrix(1 0 0 -1 403.363 778.909)" fill="#F8650F"/>
+<rect width="37.0909" height="185.455" transform="matrix(1 0 0 -1 37.0908 704.728)" fill="#F8650F"/>
+<rect width="37.0909" height="37.0909" transform="matrix(1 0 0 -1 74.1816 556.363)" fill="#F8650F"/>
+<rect width="37.0909" height="37.0909" transform="matrix(1 0 0 -1 74.1816 519.272)" fill="#F8650F"/>
+<rect width="37.0909" height="37.0909" transform="matrix(1 0 0 -1 111.272 519.272)" fill="#F8650F"/>
+<rect width="37.0909" height="37.0909" transform="matrix(1 0 0 -1 111.272 482.182)" fill="#F8650F"/>
+<rect width="37.0909" height="37.0909" transform="matrix(1 0 0 -1 148.363 482.182)" fill="#F8650F"/>
+<rect x="445.091" y="704.728" width="37.0909" height="185.455" transform="rotate(-180 445.091 704.728)" fill="#F8650F"/>
+<rect x="408" y="556.363" width="37.0909" height="37.0909" transform="rotate(-180 408 556.363)" fill="#F8650F"/>
+<rect x="408" y="519.272" width="37.0909" height="37.0909" transform="rotate(-180 408 519.272)" fill="#F8650F"/>
+<rect x="370.909" y="519.272" width="37.0909" height="37.0909" transform="rotate(-180 370.909 519.272)" fill="#F8650F"/>
+<rect x="370.909" y="482.182" width="37.0909" height="37.0909" transform="rotate(-180 370.909 482.182)" fill="#F8650F"/>
+<rect x="333.818" y="482.182" width="37.0909" height="37.0909" transform="rotate(-180 333.818 482.182)" fill="#F8650F"/>
+<rect width="482.182" height="37.0909" transform="matrix(1 0 0 -1 0 741.818)" fill="#F8650F"/>
+</svg>

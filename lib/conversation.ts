@@ -7,7 +7,7 @@ import {
 } from "./agent-state";
 import { chooseAction } from "./behavior-policy";
 import { evaluateMessage, type AgentEvaluation } from "./evaluator";
-import { generatePotterChatReply } from "./openai";
+import { generatePotterChatReply, generatePotterChatReplyStream, parseStructuredChatAnswer } from "./openai";
 
 export type ChatMessage = {
   role: "user" | "assistant";
@@ -116,35 +116,27 @@ export type PotterChatResponse = {
 
 export type PotterChatResult = PotterSilenceResponse | PotterChatResponse;
 
-export function resolveAgentState(value: unknown): AgentState {
-  if (isAgentState(value)) {
-    return value;
-  }
-  return createInitialAgentState();
+function formatSseEvent(data: unknown): Uint8Array {
+  return new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`);
 }
 
-function buildConversationHistory(
-  messages: ConversationHistoryEntry[] | undefined,
-  message: string,
-): ConversationHistoryEntry[] {
-  const history = sanitizeConversationHistory(messages);
-  const last = history.at(-1);
+function parseSseBlock(block: string): { type?: string; delta?: string; response?: { id?: string } } | null {
+  const data = block
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart())
+    .join("\n");
 
-  if (
-    last &&
-    isChatMessage(last) &&
-    last.role === "user" &&
-    last.content.trim() === message.trim()
-  ) {
-    return history;
+  if (!data || data === "[DONE]") return null;
+
+  try {
+    return JSON.parse(data) as { type?: string; delta?: string; response?: { id?: string } };
+  } catch {
+    return null;
   }
-
-  return [...history, { role: "user", content: message }];
 }
 
-export async function handlePotterChat(
-  input: PotterChatRequest,
-): Promise<PotterChatResult> {
+async function preparePotterTurn(input: PotterChatRequest) {
   const previousState = resolveAgentState(input.agentState);
   const conversation = formatConversation(
     buildConversationHistory(input.messages, input.message),
@@ -180,6 +172,163 @@ export async function handlePotterChat(
     conversationOpen: nextState.conversationOpen,
   });
 
+  return { conversation, action, nextState, evaluation };
+}
+
+export async function handlePotterChatStream(
+  input: PotterChatRequest,
+): Promise<ReadableStream<Uint8Array>> {
+  const { conversation, action, nextState, evaluation } =
+    await preparePotterTurn(input);
+
+  const turnEvent = {
+    type: "potter.turn",
+    action,
+    state: nextState,
+    evaluation,
+  };
+
+  if (action === "silence") {
+    return new ReadableStream({
+      start(controller) {
+        controller.enqueue(formatSseEvent(turnEvent));
+        controller.enqueue(
+          formatSseEvent({
+            type: "potter.complete",
+            action,
+            state: nextState,
+            evaluation,
+            text: "",
+          }),
+        );
+        controller.close();
+      },
+    });
+  }
+
+  const upstream = await generatePotterChatReplyStream({
+    message: input.message,
+    conversation,
+    behavior: action,
+    state: nextState,
+  });
+
+  if (!upstream.body) {
+    throw new Error("Potter chat response stream was empty.");
+  }
+
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+
+  return new ReadableStream({
+    async start(controller) {
+      controller.enqueue(formatSseEvent(turnEvent));
+
+      let buffer = "";
+      let rawJson = "";
+      let responseId = "";
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (value) {
+            controller.enqueue(value);
+            buffer += decoder.decode(value, { stream: !done });
+
+            const blocks = buffer.split(/\r?\n\r?\n/);
+            buffer = blocks.pop() ?? "";
+
+            for (const block of blocks) {
+              const payload = parseSseBlock(block);
+              if (payload?.type === "response.output_text.delta" && payload.delta) {
+                rawJson += payload.delta;
+              }
+              if (payload?.type === "response.completed") {
+                responseId = payload.response?.id ?? responseId;
+              }
+            }
+          }
+
+          if (done) break;
+        }
+
+        if (buffer.trim()) {
+          const payload = parseSseBlock(buffer);
+          if (payload?.type === "response.output_text.delta" && payload.delta) {
+            rawJson += payload.delta;
+          }
+          if (payload?.type === "response.completed") {
+            responseId = payload.response?.id ?? responseId;
+          }
+        }
+
+        let text = "";
+        if (rawJson.trim()) {
+          try {
+            text = parseStructuredChatAnswer(rawJson).text;
+          } catch {
+            text = "";
+          }
+        }
+
+        let finalState = nextState;
+        if (action === "end") {
+          finalState = clampAgentState({
+            ...nextState,
+            conversationOpen: false,
+          });
+        }
+
+        controller.enqueue(
+          formatSseEvent({
+            type: "potter.complete",
+            action,
+            state: finalState,
+            evaluation,
+            text,
+            responseId,
+          }),
+        );
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+  });
+}
+
+export function resolveAgentState(value: unknown): AgentState {
+  if (isAgentState(value)) {
+    return value;
+  }
+  return createInitialAgentState();
+}
+
+function buildConversationHistory(
+  messages: ConversationHistoryEntry[] | undefined,
+  message: string,
+): ConversationHistoryEntry[] {
+  const history = sanitizeConversationHistory(messages);
+  const last = history.at(-1);
+
+  if (
+    last &&
+    isChatMessage(last) &&
+    last.role === "user" &&
+    last.content.trim() === message.trim()
+  ) {
+    return history;
+  }
+
+  return [...history, { role: "user", content: message }];
+}
+
+export async function handlePotterChat(
+  input: PotterChatRequest,
+): Promise<PotterChatResult> {
+  const { conversation, action, nextState, evaluation } =
+    await preparePotterTurn(input);
+
   if (action === "silence") {
     return {
       action,
@@ -195,8 +344,9 @@ export async function handlePotterChat(
     state: nextState,
   });
 
+  let finalState = nextState;
   if (action === "end") {
-    nextState = clampAgentState({
+    finalState = clampAgentState({
       ...nextState,
       conversationOpen: false,
     });
@@ -205,7 +355,7 @@ export async function handlePotterChat(
   return {
     action,
     text: reply.text,
-    state: nextState,
+    state: finalState,
     evaluation,
   };
 }

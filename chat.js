@@ -1,25 +1,35 @@
-import { DEFAULT_HEADLINE } from "./headline-type.js";
+import { setCharacterSpeaking } from "./character-icon-talk.js";
 import {
   applyMood,
-  getTomHeadline,
-  getTomMood,
-  getTomSendLabel,
-  handleTomPet,
-} from "./tom-mood.js";
-import { applyTomAnswerMood } from "./tom-answer-mood.js";
+  getPepperHeadline,
+  getPepperMood,
+  getPepperSendLabel,
+  handlePepperPet,
+} from "./pepper-mood.js";
+import { applyPepperAnswerMood } from "./pepper-answer-mood.js";
 import { evaluateSubmittedMessage, startConversationEndRunaway } from "./runaway-input.js";
 import {
   clearPotterWithdrawShift,
   clearConversationEndDivider,
   renderPotterActionAnswer,
   WITHDRAW_LABEL,
+  END_LABEL,
 } from "./potter-action-ui.js";
 import {
   prepareAnswerTextForScrape,
   scrapeFallPhrase,
 } from "./rupin-rough-erase.js";
+import { logInteraction } from "./interaction-log.js";
+import {
+  initF1Composer,
+  notifyF1AnswerComplete,
+  notifyF1GenerationCancelled,
+  notifyF1MessageSubmit,
+} from "./f1-composer-ui.js";
+import potterLoadingIcon from "./assets/icons/potter-loading.svg";
 
 const character = document.body.dataset.character || "Potter";
+const isF1 = character === "F1";
 const thread = document.getElementById("chat-thread");
 const form = document.getElementById("chat-form");
 const input = document.getElementById("chat-input");
@@ -35,7 +45,8 @@ const THINKING_HEADLINE = "Thinking...";
 const dockedHeadlines = {
   Potter: "Start with an idea worth discussing.",
   Rupin: "I am always confident with my knowledge.",
-  Tom: "What do you want to talk about?",
+  Pepper: "What do you want to talk about?",
+  F1: "I know everything. Just Ask and Believe.",
 };
 
 const TYPE_MS = 12;
@@ -58,6 +69,9 @@ let thinkingTimer = 0;
 /** @type {AbortController | null} */
 let fetchController = null;
 
+/** @type {HTMLElement | null} */
+let lastQuestionEl = null;
+
 /** @type {unknown | undefined} */
 let potterAgentState;
 
@@ -79,6 +93,10 @@ function resetPotterAgentState() {
 }
 
 function handlePotterConversationEnd(answer) {
+  logInteraction("potter.conversation.end", {
+    text: answer.text?.trim().slice(0, 120) ?? "",
+  });
+
   startConversationEndRunaway(() => {
     resetPotterAgentState();
     clearConversationEndDivider(document.querySelector(".chat-panel"));
@@ -101,7 +119,7 @@ function logPotterAgentState(result) {
   if (character !== "Potter") return;
   if (!result || typeof result !== "object") return;
 
-  console.log("[potter agent]", {
+  logInteraction("potter.agent", {
     action: result.action,
     evaluation: result.evaluation,
     state: result.state,
@@ -115,14 +133,14 @@ function logPotterAgentState(result) {
 }
 
 function getRestoredSendLabel() {
-  if (character === "Tom") {
-    return getTomSendLabel();
+  if (character === "Pepper") {
+    return getPepperSendLabel();
   }
   return "Send";
 }
 
-function isTomInputBlocked() {
-  return character === "Tom" && getTomMood() === "tired";
+function isPepperInputBlocked() {
+  return character === "Pepper" && getPepperMood() === "tired";
 }
 
 function focusInputIfEnabled() {
@@ -131,8 +149,24 @@ function focusInputIfEnabled() {
   }
 }
 
+let characterSpeakingStarted = false;
+
+function beginCharacterSpeaking() {
+  if (characterSpeakingStarted) return;
+  characterSpeakingStarted = true;
+  setCharacterSpeaking(true);
+}
+
+function stopCharacterSpeaking() {
+  characterSpeakingStarted = false;
+  setCharacterSpeaking(false);
+}
+
 function setGenerating(active) {
   isGenerating = active;
+  if (!active) {
+    stopCharacterSpeaking();
+  }
   if (!sendButton) return;
 
   if (active) {
@@ -166,13 +200,15 @@ function setThinkingHeadline() {
 function restoreHeadlineAfterGeneration() {
   headline.classList.remove("is-wave", "is-typing");
   headline.textContent =
-    character === "Tom"
-      ? getTomHeadline()
+    character === "Pepper"
+      ? getPepperHeadline()
       : dockedHeadlines[character] || DEFAULT_HEADLINE;
 }
 
 function cancelGeneration() {
   if (!isGenerating) return;
+
+  logInteraction("generation.cancel");
 
   generationToken += 1;
   fetchController?.abort();
@@ -184,6 +220,7 @@ function cancelGeneration() {
 
   restoreHeadlineAfterGeneration();
   focusInputIfEnabled();
+  if (isF1) notifyF1GenerationCancelled();
 }
 
 function wait(ms, token) {
@@ -225,11 +262,11 @@ function dockComposer() {
       }
       composer.classList.add("is-catch-locked", "chat-panel__composer--runaway");
     }
-    if (input) input.disabled = isTomInputBlocked();
+    if (input) input.disabled = isPepperInputBlocked();
     return;
   }
 
-  // Rupin/Tom: dock to bottom center after first send
+  // Rupin/Pepper/F1: dock to bottom center after first send
   composer?.classList.remove("chat-panel__composer--runaway", "is-catch-locked");
 
   if (composer) {
@@ -241,7 +278,7 @@ function dockComposer() {
     composer.style.removeProperty("--catch-y");
   }
 
-  if (input) input.disabled = isTomInputBlocked();
+  if (input) input.disabled = isPepperInputBlocked();
 }
 
 function appendQuestion(text) {
@@ -249,19 +286,45 @@ function appendQuestion(text) {
   el.className = "chat-question";
   el.textContent = text;
   thread.appendChild(el);
+  lastQuestionEl = el;
   scrollThreadToLatest();
   return el;
 }
 
-function mountAnswerLoadingDots(el) {
+function createAnswerLoadingIcon() {
+  const wrap = document.createElement("span");
+  wrap.className = "chat-answer__loading";
+
+  const icon = document.createElement("img");
+  icon.className = "chat-loading__icon";
+  icon.src = potterLoadingIcon;
+  icon.alt = "";
+  icon.width = 180;
+  icon.height = 110;
+  icon.decoding = "async";
+  icon.setAttribute("aria-hidden", "true");
+  wrap.appendChild(icon);
+  return wrap;
+}
+
+function mountAnswerLoadingIndicator(el) {
   el.replaceChildren();
   el.classList.add("chat-answer--loading");
+
+  if (character === "Potter") {
+    el.appendChild(createAnswerLoadingIcon());
+    return;
+  }
+
+  const wrap = document.createElement("span");
+  wrap.className = "chat-answer__loading chat-answer__loading--dots";
   for (let index = 0; index < 3; index += 1) {
     const dot = document.createElement("span");
     dot.className = "chat-loading__dot";
     dot.style.setProperty("--i", String(index));
-    el.appendChild(dot);
+    wrap.appendChild(dot);
   }
+  el.appendChild(wrap);
 }
 
 function clearAnswerLoadingState(el) {
@@ -406,6 +469,9 @@ function typeText(target, text, speed = TYPE_MS, token = generationToken) {
       }
 
       target.textContent += text[index];
+      if (index === 0) {
+        beginCharacterSpeaking();
+      }
       index += 1;
       scrollThreadToLatest();
 
@@ -430,6 +496,9 @@ function typeTextAppend(target, text, speed = TYPE_MS, token = generationToken) 
       }
 
       target.textContent += text[index];
+      if (index === 0) {
+        beginCharacterSpeaking();
+      }
       index += 1;
       scrollThreadToLatest();
 
@@ -519,12 +588,12 @@ async function appendAnswer(reply, token = generationToken, answerMood = null) {
 
   const isStructured = hasStructuredAnswer(fullText);
   if (
-    character === "Tom" &&
+    character === "Pepper" &&
     !isStructured &&
     answerMood &&
     answerMood !== "common"
   ) {
-    applyTomAnswerMood(el, fullText, answerMood);
+    applyPepperAnswerMood(el, fullText, answerMood);
   } else {
     renderAnswerMarkdown(el, fullText);
   }
@@ -885,10 +954,8 @@ async function fetchChatReply(message, token, onDelta) {
   }
 
   const contentType = response.headers.get("content-type") || "";
-  const isPotterJsonResponse =
-    character === "Potter" && !contentType.includes("text/event-stream");
 
-  if (isPotterJsonResponse || contentType.includes("application/json")) {
+  if (contentType.includes("application/json")) {
     const result = await response.json();
     logPotterAgentState(result);
 
@@ -920,10 +987,30 @@ async function fetchChatReply(message, token, onDelta) {
   let text = "";
   let responseId = "";
   let completed = false;
+  let potterTurn = null;
+  let potterComplete = null;
 
   const handleEvent = (block) => {
     const payload = parseServerSentEvent(block);
     if (!payload) return;
+
+    if (payload.type === "potter.turn") {
+      potterTurn = payload;
+      if (character === "Potter") {
+        potterAgentState = payload.state;
+        logPotterAgentState(payload);
+      }
+      return;
+    }
+
+    if (payload.type === "potter.complete") {
+      potterComplete = payload;
+      if (character === "Potter") {
+        potterAgentState = payload.state;
+      }
+      completed = true;
+      return;
+    }
 
     if (payload.type === "response.output_text.delta" && payload.delta) {
       text += payload.delta;
@@ -938,7 +1025,9 @@ async function fetchChatReply(message, token, onDelta) {
 
     if (payload.type === "response.completed") {
       responseId = payload.response?.id || responseId;
-      completed = true;
+      if (character !== "Potter") {
+        completed = true;
+      }
       return;
     }
 
@@ -981,6 +1070,40 @@ async function fetchChatReply(message, token, onDelta) {
 
   if (buffer.trim()) {
     handleEvent(buffer);
+  }
+
+  if (character === "Potter") {
+    if (!potterComplete) {
+      throw createRetryableChatError(
+        "Potter chat stream ended before completion.",
+        "stream_interrupted",
+      );
+    }
+
+    logPotterAgentState(potterComplete);
+    potterMessages.push({ role: "user", content: message });
+
+    let finalText = potterComplete.text ?? "";
+    if (!finalText.trim() && text.trim()) {
+      try {
+        finalText = parseStructuredChatAnswer(text).text;
+      } catch {
+        finalText = extractPartialAnswer(text) ?? "";
+      }
+    }
+
+    if (finalText.trim()) {
+      potterMessages.push({ role: "assistant", content: finalText });
+    } else if (potterComplete.action === "silence") {
+      potterMessages.push({ kind: "behavior", action: "silence" });
+    }
+
+    return {
+      text: finalText,
+      mood: "common",
+      action: potterComplete.action ?? potterTurn?.action,
+      state: potterComplete.state ?? potterTurn?.state,
+    };
   }
 
   if (!completed) {
@@ -1028,6 +1151,8 @@ async function fetchChatReplyWithRetry(message, token, onDelta, onRetry) {
 }
 
 function appendErrorAnswer(message) {
+  logInteraction("answer.error", { message });
+
   const el = document.createElement("div");
   el.className = "chat-answer chat-answer--error";
   el.textContent = message;
@@ -1043,7 +1168,7 @@ async function appendStreamingAnswer(
   const el = document.createElement("div");
   el.className = "chat-answer is-generating";
   thread.appendChild(el);
-  mountAnswerLoadingDots(el);
+  mountAnswerLoadingIndicator(el);
   scrollThreadToLatest();
 
   try {
@@ -1052,12 +1177,16 @@ async function appendStreamingAnswer(
       token,
       (_delta, partialAnswer) => {
         if (partialAnswer == null) return;
+        if (partialAnswer.trim()) {
+          beginCharacterSpeaking();
+        }
         clearAnswerLoadingState(el);
         el.textContent = partialAnswer;
         scrollThreadToLatest();
       },
       () => {
-        mountAnswerLoadingDots(el);
+        stopCharacterSpeaking();
+        mountAnswerLoadingIndicator(el);
       },
     );
 
@@ -1065,12 +1194,20 @@ async function appendStreamingAnswer(
     el.classList.remove("is-generating");
 
     if (character === "Potter" && answer.action && answer.action !== "respond") {
+      logInteraction("potter.action", {
+        action: answer.action,
+        textLength: answer.text?.length ?? 0,
+      });
+
+      if (answer.action !== "silence") {
+        beginCharacterSpeaking();
+      }
+
       await renderPotterActionAnswer({
         el,
         action: answer.action,
         text: answer.text,
-        composer,
-        chatPanel: document.querySelector(".chat-panel"),
+        questionEl: lastQuestionEl,
         isCancelled: () => isCancelled(token),
         onScroll: scrollThreadToLatest,
       });
@@ -1083,7 +1220,7 @@ async function appendStreamingAnswer(
         answer.action === "withdraw"
           ? answer.text?.trim() || WITHDRAW_LABEL
           : answer.action === "end"
-            ? answer.text || "conversation end."
+            ? answer.text || END_LABEL
             : answer.text;
 
       answerHistory.push({
@@ -1101,28 +1238,31 @@ async function appendStreamingAnswer(
       return { el, conversationEnded: false };
     }
 
+    if (answer.text?.trim()) {
+      beginCharacterSpeaking();
+    }
     el.textContent = answer.text;
 
     const answerMood = answer.mood;
     el.dataset.answerMood = answerMood;
     const isStructured = hasStructuredAnswer(answer.text);
 
-    if (character === "Tom") {
+    if (character === "Pepper") {
       applyMood(answerMood);
       if (!isStructured) {
-        applyTomAnswerMood(el, answer.text, answerMood);
+        applyPepperAnswerMood(el, answer.text, answerMood);
       }
     }
 
-    if (character !== "Tom" || isStructured || answerMood === "common") {
+    if (character !== "Pepper" || isStructured || answerMood === "common") {
       renderAnswerMarkdown(el, answer.text);
     }
 
-    console.info("[chat] answer mood assigned", {
-      character,
+    logInteraction("answer.received", {
       mood: answerMood,
-      uiMood:
-        character === "Tom" ? document.body.dataset.tomMood ?? null : null,
+      uiMood: character === "Pepper" ? document.body.dataset.pepperMood ?? null : null,
+      textLength: answer.text?.length ?? 0,
+      isPushback,
     });
 
     if (isPushback && character === "Rupin") {
@@ -1156,8 +1296,8 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
-  if (isTomInputBlocked()) {
-    handleTomPet();
+  if (isPepperInputBlocked()) {
+    handlePepperPet();
     return;
   }
 
@@ -1166,6 +1306,13 @@ form.addEventListener("submit", async (event) => {
     focusInputIfEnabled();
     return;
   }
+
+  logInteraction("message.submit", {
+    message,
+    isPushback: answerHistory.length > 0,
+  });
+
+  if (isF1) notifyF1MessageSubmit();
 
   if (character === "Potter") {
     clearPotterWithdrawShift(composer);
@@ -1186,6 +1333,9 @@ form.addEventListener("submit", async (event) => {
       if (isCancelled(token)) return;
       const result = await appendStreamingAnswer(message, token, isPushback);
       if (!result.conversationEnded) {
+        if (isF1) {
+          await notifyF1AnswerComplete();
+        }
         restoreHeadlineAfterGeneration();
         focusInputIfEnabled();
       }
@@ -1198,6 +1348,9 @@ form.addEventListener("submit", async (event) => {
           ? error.message
           : "Something went wrong. Try again.",
       );
+      if (isF1) {
+        await notifyF1AnswerComplete();
+      }
       restoreHeadlineAfterGeneration();
       focusInputIfEnabled();
     } finally {
@@ -1215,6 +1368,7 @@ form.addEventListener("submit", async (event) => {
   });
 
   if (penalty.deferred) {
+    logInteraction("penalty.deferred", { message });
     setGenerating(false);
     restoreHeadlineAfterGeneration();
     return;
@@ -1222,3 +1376,11 @@ form.addEventListener("submit", async (event) => {
 
   await runGeneration();
 });
+
+if (isF1) {
+  initF1Composer({
+    composer,
+    input,
+    onTimeoutSubmit: () => form.requestSubmit(),
+  });
+}

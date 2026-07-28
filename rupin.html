@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;600;700&family=Datatype:wght@400;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;600;700&family=Xanh+Mono&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./orbit-kr.css" />
@@ -20,6 +20,7 @@
         <svg class="composer-trail" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
           <path class="composer-trail__path" />
         </svg>
+        
         <header class="brand">
           <a href="./index.html"><h1>hackedGPT</h1></a>
         </header>
@@ -30,42 +31,78 @@
             type="button"
             class="character"
             data-name="Potter"
-            data-color="#ff399f"
-            data-color-active="#ff0015"
+            data-color="#ff46ff"
+            data-color-active="#ff46ff"
+            data-color-hover="#ed23ed"
             data-href="./index.html"
             aria-pressed="false"
             aria-label="Open Potter chat"
           >
-            <span class="character__swatch" style="--swatch: #ff399f; --swatch-active: #ff0015"></span>
+            <span class="character__swatch" style="--swatch: #ff46ff; --swatch-active: #ff46ff; --swatch-hover: #ed23ed">
+              <img class="character__icon character__icon--default" src="./assets/icons/potter.svg" alt="" width="97" height="97" decoding="async" />
+              <img class="character__icon character__icon--speaking" src="./assets/icons/potter-speaking.svg" alt="" width="97" height="97" decoding="async" aria-hidden="true" />
+            </span>
             <span class="character__label">Potter</span>
           </button>
           <button
             type="button"
             class="character is-active"
             data-name="Rupin"
-            data-color="#ff5e00"
-            data-color-active="#e1ff00"
+            data-color="#2edbf0"
+            data-color-active="#2edbf0"
+            data-color-hover="#00c7df"
             data-href="./rupin.html"
             aria-pressed="true"
             aria-label="Open Rupin chat"
           >
-            <span class="character__swatch" style="--swatch: #ff5e00; --swatch-active: #e1ff00"></span>
+            <span class="character__swatch" style="--swatch: #2edbf0; --swatch-active: #2edbf0; --swatch-hover: #00c7df">
+              <img class="character__icon character__icon--default" src="./assets/icons/rupin.svg" alt="" width="97" height="97" decoding="async" />
+              
+            </span>
             <span class="character__label">Rupin</span>
           </button>
+          <div class="character-group">
+            
           <button
             type="button"
             class="character"
-            data-name="Tom"
-            data-color="#54fe54"
-            data-color-active="#00ffe1"
-            data-href="./tom.html"
+            data-name="Pepper"
+            data-color="#4CFF4F"
+            data-color-active="#4CFF4F"
+            data-color-hover="#2DE731"
+            data-href="./pepper.html"
             aria-pressed="false"
-            aria-label="Open Tom chat"
+            aria-label="Open Pepper chat"
           >
-            <span class="character__swatch" style="--swatch: #54fe54; --swatch-active: #00ffe1"></span>
-            <span class="character__label">Tom</span>
+            <span class="character__swatch" style="--swatch: #4CFF4F; --swatch-active: #4CFF4F; --swatch-hover: #2DE731">
+              <img class="character__icon character__icon--default" src="./assets/icons/tom.svg" alt="" width="97" height="97" decoding="async" />
+              
+            </span>
+            <span class="character__label">Pepper</span>
           </button>
+            <a
+              class="character character--f1"
+              href="./f1.html"
+              aria-current="false"
+              aria-label="Open F1 chat"
+            >
+              <span class="character__swatch" style="--swatch: #ff670f; --swatch-active: #ff670f; --swatch-hover: #ea5600">
+                <img class="character__icon character__icon--default" src="./assets/icons/tom.svg" alt="" width="97" height="97" decoding="async" />
+              </span>
+              <span class="character__label">F1</span>
+            </a>
+          </div>
         </nav>
+
+        <div class="user-badge-zone">
+          <div class="user-badge__rule" aria-hidden="true"></div>
+          <div class="user-badge" aria-label="User profile">
+            <span class="user-badge__avatar" aria-hidden="true">
+              <span class="user-badge__initial" id="user-initial">E</span>
+            </span>
+            <span class="user-badge__name" id="user-display-name">Ellie</span>
+          </div>
+        </div>
 
         <div class="sideline" aria-hidden="true"></div>
 
@@ -92,6 +129,7 @@
     </div>
 
     <script type="module" src="./nav.js"></script>
+    <script type="module" src="./user-badge.js"></script>
     <script type="module" src="./runaway-input.js"></script>
     <script type="module" src="./chat.js"></script>
   </body>

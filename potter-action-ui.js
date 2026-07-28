@@ -1,11 +1,12 @@
-const WITHDRAW_LABEL = "Not interested.";
-const END_LABEL = "conversation end.";
-const SILENCE_DURATION_MS = 2200;
-const WITHDRAW_CLICKS_TO_RECOVER = 3;
-const WITHDRAW_HIDE_RATIO = 0.5;
+import { logInteraction } from "./interaction-log.js";
 
-let withdrawClickCount = 0;
-let withdrawRecoveryBound = false;
+const WITHDRAW_LABEL = "Not interested.";
+const END_LABEL = "conversation over";
+const HESITATE_PREFIX = "hmm...";
+const HESITATE_DURATION_MS = 5000;
+const QUESTION_DISMISS_MS = 420;
+const SHORT_GRAVITY = 3400;
+const SHORT_DROP_START = -180;
 
 function wait(ms, isCancelled) {
   return new Promise((resolve, reject) => {
@@ -19,71 +20,75 @@ function wait(ms, isCancelled) {
   });
 }
 
-function getComposerInput(composer) {
-  return composer?.querySelector("#chat-input") ?? document.getElementById("chat-input");
-}
+function animateGravityDrop(el, isCancelled) {
+  return new Promise((resolve, reject) => {
+    let y = SHORT_DROP_START;
+    let vy = 0;
+    let last = performance.now();
+    let rafId = 0;
 
-function ensureCatchCoordinates(composer) {
-  if (!composer) return;
+    el.style.willChange = "transform";
 
-  if (composer.dataset.catchX != null && composer.dataset.catchY != null) {
-    composer.style.setProperty("--catch-x", `${composer.dataset.catchX}px`);
-    composer.style.setProperty("--catch-y", `${composer.dataset.catchY}px`);
-    return;
-  }
+    const finish = () => {
+      cancelAnimationFrame(rafId);
+      el.style.transform = "";
+      el.style.willChange = "";
+    };
 
-  const existingX = composer.style.getPropertyValue("--catch-x").trim();
-  const existingY = composer.style.getPropertyValue("--catch-y").trim();
-  if (existingX && existingY) return;
-
-  const rect = composer.getBoundingClientRect();
-  composer.style.setProperty("--catch-x", `${rect.left}px`);
-  composer.style.setProperty("--catch-y", `${rect.top}px`);
-  composer.dataset.catchX = String(Math.round(rect.left));
-  composer.dataset.catchY = String(Math.round(rect.top));
-}
-
-function bindPotterWithdrawRecovery(composer) {
-  if (!composer || withdrawRecoveryBound) return;
-  withdrawRecoveryBound = true;
-
-  composer.addEventListener(
-    "mousedown",
-    (event) => {
-      if (!composer.classList.contains("is-withdraw-shift")) return;
-
-      event.preventDefault();
-      withdrawClickCount += 1;
-
-      const totalOffset = Number(composer.dataset.withdrawOffset || 0);
-      const remainingClicks = WITHDRAW_CLICKS_TO_RECOVER - withdrawClickCount;
-
-      if (remainingClicks <= 0) {
-        composer.classList.add("is-withdraw-pop");
-        clearPotterWithdrawShift(composer);
-        window.setTimeout(() => {
-          composer.classList.remove("is-withdraw-pop");
-        }, 420);
-
-        const input = getComposerInput(composer);
-        if (input) {
-          input.disabled = false;
-          input.focus();
-        }
+    const frame = (now) => {
+      if (isCancelled?.()) {
+        finish();
+        reject(new DOMException("Aborted", "AbortError"));
         return;
       }
 
-      const nextOffset = Math.round(
-        (totalOffset * remainingClicks) / WITHDRAW_CLICKS_TO_RECOVER,
-      );
-      composer.style.setProperty("--withdraw-offset", `${nextOffset}px`);
-      composer.classList.add("is-withdraw-nudge");
-      window.setTimeout(() => {
-        composer.classList.remove("is-withdraw-nudge");
-      }, 180);
-    },
-    true,
-  );
+      const dt = Math.min((now - last) / 1000, 0.032);
+      last = now;
+      vy += SHORT_GRAVITY * dt;
+      y += vy * dt;
+
+      if (y >= 0) {
+        finish();
+        resolve();
+        return;
+      }
+
+      el.style.transform = `translateY(${y}px)`;
+      rafId = requestAnimationFrame(frame);
+    };
+
+    rafId = requestAnimationFrame(frame);
+  });
+}
+
+function dismissQuestion(questionEl, isCancelled) {
+  return new Promise((resolve, reject) => {
+    if (!questionEl?.isConnected) {
+      resolve();
+      return;
+    }
+
+    logInteraction("potter.question.dismiss");
+
+    questionEl.classList.add("is-potter-dismiss");
+
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      questionEl.removeEventListener("animationend", settle);
+      questionEl.remove();
+
+      if (isCancelled?.()) {
+        reject(new DOMException("Aborted", "AbortError"));
+        return;
+      }
+      resolve();
+    };
+
+    questionEl.addEventListener("animationend", settle);
+    window.setTimeout(settle, QUESTION_DISMISS_MS + 80);
+  });
 }
 
 export function clearPotterWithdrawShift(composer) {
@@ -95,33 +100,6 @@ export function clearPotterWithdrawShift(composer) {
   );
   composer.style.removeProperty("--withdraw-offset");
   delete composer.dataset.withdrawOffset;
-  withdrawClickCount = 0;
-}
-
-export function applyPotterWithdrawShift(composer) {
-  if (!composer) return;
-
-  ensureCatchCoordinates(composer);
-  bindPotterWithdrawRecovery(composer);
-
-  const width = composer.getBoundingClientRect().width;
-  const offset = Math.round(width * WITHDRAW_HIDE_RATIO);
-  composer.style.setProperty("--withdraw-offset", `${offset}px`);
-  composer.dataset.withdrawOffset = String(offset);
-  withdrawClickCount = 0;
-  composer.classList.remove("is-withdraw-pop");
-  composer.classList.add("is-withdraw-shift");
-}
-
-export function appendConversationEndDivider(chatPanel) {
-  if (!chatPanel || chatPanel.querySelector(".chat-panel__conversation-end")) {
-    return;
-  }
-
-  const divider = document.createElement("hr");
-  divider.className = "chat-panel__conversation-end";
-  divider.setAttribute("aria-hidden", "true");
-  chatPanel.appendChild(divider);
 }
 
 export function clearConversationEndDivider(chatPanel) {
@@ -130,69 +108,51 @@ export function clearConversationEndDivider(chatPanel) {
     ?.remove();
 }
 
-async function renderSilence(el, isCancelled, onScroll) {
-  el.className = "chat-answer chat-answer--silence";
-  el.replaceChildren();
-
-  for (let index = 0; index < 3; index += 1) {
-    const dot = document.createElement("span");
-    dot.className = "potter-silence__dot";
-    dot.style.setProperty("--i", String(index));
-    el.appendChild(dot);
-  }
-
-  onScroll?.();
-  await wait(SILENCE_DURATION_MS, isCancelled);
-  el.classList.add("is-fading");
-  await wait(420, isCancelled);
+async function renderSilence(el, questionEl, isCancelled, onScroll) {
+  await dismissQuestion(questionEl, isCancelled);
   el.remove();
+  onScroll?.();
 }
 
 async function renderShort(el, text, isCancelled, onScroll) {
   el.className = "chat-answer chat-answer--short";
-  el.replaceChildren();
-
-  const content = text.trim() || "…";
-  [...content].forEach((char, index) => {
-    const span = document.createElement("span");
-    span.className = "potter-short__char";
-    span.style.setProperty("--i", String(index));
-    span.textContent = char === " " ? "\u00a0" : char;
-    el.appendChild(span);
-  });
-
+  const content = text.trim() || el.textContent.trim() || "…";
+  el.textContent = content;
   onScroll?.();
-  await wait(Math.min(2400, 120 + content.length * 38), isCancelled);
+  await animateGravityDrop(el, isCancelled);
+  await wait(280, isCancelled);
 }
 
 async function renderHesitate(el, text, isCancelled, onScroll) {
+  const content = text.trim() || el.textContent.trim() || "…";
+
   el.className = "chat-answer chat-answer--hesitate";
-  el.replaceChildren();
-
-  const content = text.trim() || "…";
-  [...content].forEach((char, index) => {
-    const span = document.createElement("span");
-    span.className = "potter-hesitate__char";
-    span.style.setProperty("--i", String(index));
-    span.textContent = char === " " ? "\u00a0" : char;
-    el.appendChild(span);
-  });
-
+  el.textContent = HESITATE_PREFIX;
   onScroll?.();
-  await wait(Math.min(3200, 400 + content.length * 62), isCancelled);
+
+  await wait(HESITATE_DURATION_MS, isCancelled);
+
+  el.textContent = content;
+  onScroll?.();
+  await wait(Math.min(1200, 180 + content.length * 24), isCancelled);
 }
 
-async function renderWithdraw(el, composer, text, isCancelled, onScroll) {
+async function renderWithdraw(el, questionEl, text, isCancelled, onScroll) {
+  await dismissQuestion(questionEl, isCancelled);
+
   el.className = "chat-answer chat-answer--withdraw";
   el.textContent = text.trim() || WITHDRAW_LABEL;
-  applyPotterWithdrawShift(composer);
   onScroll?.();
   await wait(700, isCancelled);
 }
 
-async function renderEnd(el, chatPanel, text, isCancelled, onScroll) {
+async function renderEnd(el, text, isCancelled, onScroll) {
   el.className = "chat-answer chat-answer--end";
   el.replaceChildren();
+
+  const divider = document.createElement("hr");
+  divider.className = "potter-end__divider";
+  divider.setAttribute("aria-hidden", "true");
 
   if (text.trim()) {
     const farewell = document.createElement("p");
@@ -201,14 +161,15 @@ async function renderEnd(el, chatPanel, text, isCancelled, onScroll) {
     el.appendChild(farewell);
   }
 
+  el.appendChild(divider);
+
   const label = document.createElement("p");
   label.className = "potter-end__label";
   label.textContent = END_LABEL;
   el.appendChild(label);
 
-  appendConversationEndDivider(chatPanel);
   onScroll?.();
-  await wait(480, isCancelled);
+  await wait(640, isCancelled);
 }
 
 /**
@@ -218,14 +179,15 @@ export async function renderPotterActionAnswer({
   el,
   action,
   text,
-  composer,
-  chatPanel,
+  questionEl,
   isCancelled,
   onScroll,
 }) {
+  logInteraction("potter.action.render", { action, textLength: text?.length ?? 0 });
+
   switch (action) {
     case "silence":
-      await renderSilence(el, isCancelled, onScroll);
+      await renderSilence(el, questionEl, isCancelled, onScroll);
       return true;
     case "short":
       await renderShort(el, text, isCancelled, onScroll);
@@ -234,10 +196,10 @@ export async function renderPotterActionAnswer({
       await renderHesitate(el, text, isCancelled, onScroll);
       return true;
     case "withdraw":
-      await renderWithdraw(el, composer, text, isCancelled, onScroll);
+      await renderWithdraw(el, questionEl, text, isCancelled, onScroll);
       return true;
     case "end":
-      await renderEnd(el, chatPanel, text, isCancelled, onScroll);
+      await renderEnd(el, text, isCancelled, onScroll);
       return true;
     case "respond":
     default:

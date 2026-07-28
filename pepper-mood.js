@@ -1,4 +1,5 @@
-import { syncTomSadFloat } from "./tom-sad-float.js";
+import { syncPepperSadFloat } from "./pepper-sad-float.js";
+import { logInteraction } from "./interaction-log.js";
 
 const MOODS = {
   happy: {
@@ -72,7 +73,7 @@ function scheduleTiredCycle() {
 
   for (const offset of TIRED_OFFSETS_MS) {
     const id = window.setTimeout(() => {
-      if (document.body.dataset.character !== "Tom") return;
+      if (document.body.dataset.character !== "Pepper") return;
       applyMood("tired");
     }, offset);
     cycleTimerIds.push(id);
@@ -102,12 +103,15 @@ function applyMood(mood) {
   if (!config) return;
 
   if (mood === "tired" && isUserEnteringMessage()) {
-    console.info("[tom-mood] tired skipped while user is typing");
+    logInteraction("pepper.mood.tired_skipped");
     return;
   }
 
+  const previousMood = currentMood;
   currentMood = mood;
-  document.body.dataset.tomMood = mood;
+  document.body.dataset.pepperMood = mood;
+
+  logInteraction("pepper.mood", { mood, previousMood });
 
   const { headline, send, input } = elements();
   if (headline) {
@@ -144,7 +148,7 @@ function applyMood(mood) {
     send.disabled = false;
   }
 
-  syncTomSadFloat(mood === "sad");
+  syncPepperSadFloat(mood === "sad");
 
   window.clearTimeout(timerId);
   timerId = 0;
@@ -252,13 +256,16 @@ function bounceChatField() {
   );
 }
 
-function handleTomPet() {
+function handlePepperPet() {
   if (currentMood !== "tired") return false;
 
   petCount += 1;
   bounceChatField();
 
-  if (petCount >= PETS_TO_WAKE) {
+  const woke = petCount >= PETS_TO_WAKE;
+  logInteraction("pepper.pet", { count: petCount, woke });
+
+  if (woke) {
     petCount = 0;
     applyMood(pickNextMood("tired"));
   }
@@ -273,20 +280,20 @@ function scheduleNextMood() {
   }, randomHoldMs());
 }
 
-function getTomSendLabel() {
+function getPepperSendLabel() {
   return MOODS[currentMood]?.sendLabel ?? "Send";
 }
 
-function getTomHeadline() {
+function getPepperHeadline() {
   return MOODS[currentMood]?.headline ?? MOODS.common.headline;
 }
 
-function getTomMood() {
+function getPepperMood() {
   return currentMood;
 }
 
-function initTomMood() {
-  if (document.body.dataset.character !== "Tom") return;
+function initPepperMood() {
+  if (document.body.dataset.character !== "Pepper") return;
 
   const { input } = elements();
   input?.addEventListener("input", () => {
@@ -297,6 +304,13 @@ function initTomMood() {
   scheduleTiredCycle();
 }
 
-initTomMood();
+initPepperMood();
 
-export { getTomHeadline, getTomMood, getTomSendLabel, applyMood, handleTomPet, MOODS };
+export {
+  getPepperHeadline,
+  getPepperMood,
+  getPepperSendLabel,
+  applyMood,
+  handlePepperPet,
+  MOODS,
+};

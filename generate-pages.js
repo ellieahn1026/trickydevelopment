@@ -25,13 +25,23 @@ writeFileSync(
 );
 
 writeFileSync(
-  "tom.html",
+  "pepper.html",
   chatPage({
-    activeName: "Tom",
-    title: "TomGPT — hackedGPT",
+    activeName: "Pepper",
+    title: "PepperGPT — hackedGPT",
     headline: "What do you want to talk about?",
-    placeholder: "Ask to TomGPT",
+    placeholder: "Ask to PepperGPT",
   }),
 );
 
-console.log("Generated index.html, potter.html, rupin.html, tom.html");
+writeFileSync(
+  "f1.html",
+  chatPage({
+    activeName: "F1",
+    title: "F1GPT — hackedGPT",
+    headline: "I know everything. Just Ask and Believe.",
+    placeholder: "Ask to F1GPT",
+  }),
+);
+
+console.log("Generated index.html, potter.html, rupin.html, pepper.html, f1.html");

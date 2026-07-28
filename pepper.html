@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PotterGPT — hackedGPT</title>
+    <title>PepperGPT — hackedGPT</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="./orbit-kr.css" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body data-character="Potter">
+  <body data-character="Pepper">
     <div class="screen">
       <div class="stage">
         <svg class="composer-trail" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
@@ -29,13 +29,13 @@
           
           <button
             type="button"
-            class="character is-active"
+            class="character"
             data-name="Potter"
             data-color="#ff46ff"
             data-color-active="#ff46ff"
             data-color-hover="#ed23ed"
             data-href="./index.html"
-            aria-pressed="true"
+            aria-pressed="false"
             aria-label="Open Potter chat"
           >
             <span class="character__swatch" style="--swatch: #ff46ff; --swatch-active: #ff46ff; --swatch-hover: #ed23ed">
@@ -65,13 +65,13 @@
             
           <button
             type="button"
-            class="character"
+            class="character is-active"
             data-name="Pepper"
             data-color="#4CFF4F"
             data-color-active="#4CFF4F"
             data-color-hover="#2DE731"
             data-href="./pepper.html"
-            aria-pressed="false"
+            aria-pressed="true"
             aria-label="Open Pepper chat"
           >
             <span class="character__swatch" style="--swatch: #4CFF4F; --swatch-active: #4CFF4F; --swatch-hover: #2DE731">
@@ -109,16 +109,16 @@
         <main class="chat-panel">
           <div class="chat-panel__thread" id="chat-thread" aria-live="polite"></div>
           <div class="chat-panel__composer" id="chat-composer">
-            <p class="prompt__headline" id="chat-headline" data-default-headline="You want to talk with me? Follow.">You want to talk with me? Follow.</p>
+            <p class="prompt__headline" id="chat-headline" data-default-headline="What do you want to talk about?">What do you want to talk about?</p>
             <form class="prompt__form" id="chat-form">
               <div class="prompt__field">
                 <input
                   type="text"
                   id="chat-input"
                   name="message"
-                  placeholder="Ask to PotterGPT"
+                  placeholder="Ask to PepperGPT"
                   autocomplete="off"
-                  aria-label="Ask to PotterGPT"
+                  aria-label="Ask to PepperGPT"
                 />
                 <button type="submit" class="prompt__send ">Send</button>
               </div>

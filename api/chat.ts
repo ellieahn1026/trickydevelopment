@@ -1,6 +1,6 @@
 import { isCharacterName } from "../lib/characters";
 import {
-  handlePotterChat,
+  handlePotterChatStream,
   type ConversationHistoryEntry,
 } from "../lib/conversation";
 import { generateChatReplyStream } from "../lib/openai";
@@ -31,12 +31,23 @@ export default async function handler(req: any, res: any) {
     }
 
     if (character === "Potter") {
-      const result = await handlePotterChat({
+      const stream = await handlePotterChatStream({
         message,
         messages,
         agentState: body.agentState,
       });
-      return res.status(200).json(result);
+
+      res.status(200);
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
+      res.flushHeaders?.();
+
+      for await (const chunk of stream) {
+        res.write(Buffer.from(chunk));
+      }
+
+      return res.end();
     }
 
     const upstream = await generateChatReplyStream({

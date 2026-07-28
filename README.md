@@ -50,7 +50,7 @@ If you built your chat as a Prompt in the OpenAI dashboard, add its ID to `.env`
 ```env
 OPENAI_PROMPT_POTTER=pmpt_xxxxxxxx
 OPENAI_PROMPT_RUPIN=pmpt_xxxxxxxx
-OPENAI_PROMPT_TOM=pmpt_xxxxxxxx
+OPENAI_PROMPT_PEPPER=pmpt_xxxxxxxx
 ```
 
 Optional version pin:

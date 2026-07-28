@@ -114,7 +114,7 @@ function extractOutputText(payload: ResponsePayload): string {
   return text;
 }
 
-function parseStructuredChatAnswer(rawJson: string): { text: string; mood: string } {
+export function parseStructuredChatAnswer(rawJson: string): { text: string; mood: string } {
   let result: unknown;
 
   try {
@@ -167,6 +167,7 @@ function buildPotterChatRequestBody(input: {
   behavior: AgentAction;
   state: AgentState;
   usePrompt: boolean;
+  stream?: boolean;
 }) {
   const body: Record<string, unknown> = {
     input: input.message,
@@ -175,6 +176,10 @@ function buildPotterChatRequestBody(input: {
       format: CHAT_RESPONSE_FORMAT,
     },
   };
+
+  if (input.stream) {
+    body.stream = true;
+  }
 
   const prompt = input.usePrompt ? buildChatPromptConfig() : undefined;
 
@@ -201,6 +206,54 @@ function buildPotterChatRequestBody(input: {
   }
 
   return body;
+}
+
+async function potterChatStreamRequest(
+  input: {
+    message: string;
+    conversation: string;
+    behavior: AgentAction;
+    state: AgentState;
+  },
+  usePrompt: boolean,
+) {
+  console.info("[openai] potter chat stream request", {
+    source: usePrompt ? "OPENAI_CHAT_PROMPT_ID" : "built-in",
+    promptId: usePrompt ? buildChatPromptConfig()?.id ?? null : null,
+    behavior: input.behavior,
+  });
+
+  return openaiFetchResponse("/responses", {
+    method: "POST",
+    body: JSON.stringify(
+      buildPotterChatRequestBody({ ...input, usePrompt, stream: true }),
+    ),
+  });
+}
+
+export async function generatePotterChatReplyStream(input: {
+  message: string;
+  conversation: string;
+  behavior: AgentAction;
+  state: AgentState;
+}): Promise<Response> {
+  const hasPrompt = Boolean(getChatPromptId());
+
+  if (!hasPrompt) {
+    return potterChatStreamRequest(input, false);
+  }
+
+  try {
+    return await potterChatStreamRequest(input, true);
+  } catch (error) {
+    if (!shouldFallbackFromPrompt(error)) {
+      throw error;
+    }
+    console.warn("[openai] saved chat prompt failed; retrying with built-in prompt", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return potterChatStreamRequest(input, false);
+  }
 }
 
 export async function generatePotterChatReply(input: {

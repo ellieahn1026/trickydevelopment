@@ -1,15 +1,22 @@
 import index from "./index.html";
 import potter from "./potter.html";
 import rupin from "./rupin.html";
-import tom from "./tom.html";
+import pepper from "./pepper.html";
+import f1 from "./f1.html";
 import { isCharacterName } from "./lib/characters";
 import {
-  handlePotterChat,
+  handlePotterChatStream,
   type ConversationHistoryEntry,
 } from "./lib/conversation";
 import { generateChatReplyStream } from "./lib/openai";
 
 const port = Number(process.env.PORT) || 3000;
+
+if (!process.env.OPENAI_API_KEY?.trim()) {
+  console.warn(
+    "[env] OPENAI_API_KEY is missing. Copy .env.example to .env and add your key, then restart the server.",
+  );
+}
 
 Bun.serve({
   port,
@@ -18,7 +25,8 @@ Bun.serve({
     "/index.html": index,
     "/potter.html": potter,
     "/rupin.html": rupin,
-    "/tom.html": tom,
+    "/pepper.html": pepper,
+    "/f1.html": f1,
     "/api/chat": {
       POST: async (req) => {
         try {
@@ -51,12 +59,18 @@ Bun.serve({
           }
 
           if (character === "Potter") {
-            const result = await handlePotterChat({
+            const stream = await handlePotterChatStream({
               message,
               messages: body.messages,
               agentState: body.agentState,
             });
-            return Response.json(result);
+            return new Response(stream, {
+              status: 200,
+              headers: {
+                "Content-Type": "text/event-stream; charset=utf-8",
+                "Cache-Control": "no-cache, no-transform",
+              },
+            });
           }
 
           const upstream = await generateChatReplyStream({

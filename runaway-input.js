@@ -8,6 +8,7 @@ import {
 } from "./headline-type.js";
 import { scoreInput } from "./input-score.js";
 import { recordComposerCenter } from "./composer-trail.js";
+import { logInteraction } from "./interaction-log.js";
 
 const CURSOR_RADIUS = 36;
 const REPEL_RADIUS = 200;
@@ -26,6 +27,8 @@ const PENALTY_MIN_CATCH_MS = 5_000;
 const PENALTY_MAX_CATCH_MS = 10_000;
 const END_RUNAWAY_MAX_MS = 15_000;
 const SEND_LEAVE_DIST = 72;
+const COMPOSER_MIN_W = 286;
+const COMPOSER_MAX_W = 832;
 
 const composer = document.querySelector(".chat-panel__composer");
 const input = document.getElementById("chat-input");
@@ -188,7 +191,7 @@ if (!composer || !input) {
   function measureSize() {
     const { laneWidth } = getBounds();
     const travelRoom = Math.max(120, laneWidth * 0.32);
-    let targetW = Math.max(220, Math.min(640, laneWidth - travelRoom));
+    let targetW = Math.max(COMPOSER_MIN_W, Math.min(COMPOSER_MAX_W, laneWidth - travelRoom));
     targetW = Math.min(targetW, laneWidth);
 
     composer.style.width = `${targetW}px`;
@@ -490,11 +493,13 @@ if (!composer || !input) {
   }
 
   function applyPenaltyStage1() {
+    logInteraction("potter.penalty.stage1");
     setDoubtHeadline(headline);
     nudgeComposerDiagonal();
   }
 
   function applyPenaltyStage2() {
+    logInteraction("potter.penalty.stage2");
     setDistantHeadline(headline);
     nudgeComposerDiagonal();
   }
@@ -512,6 +517,8 @@ if (!composer || !input) {
     penaltyRunawayActive = !conversationEnd;
     conversationEndRunawayActive = conversationEnd;
     clearPenaltyVisuals();
+
+    logInteraction(conversationEnd ? "potter.runaway.conversation_end" : "potter.runaway.penalty");
 
     window.clearTimeout(catchReadyTimer);
     window.clearTimeout(maxDodgeTimer);
@@ -606,12 +613,19 @@ if (!composer || !input) {
     const score = scoreInput(message);
     if (score > 3) return { deferred: false };
 
+    logInteraction("potter.penalty.low_score", { score, strikes: lowScoreStrikes });
+
     return handleMessageLowScore(onCaught);
   };
 
   function lockComposer(initialValue = "") {
     if (locked) return;
     locked = true;
+
+    logInteraction("potter.composer.caught", {
+      hasInitialValue: Boolean(initialValue),
+    });
+
     penaltyRunawayActive = false;
     conversationEndRunawayActive = false;
     activeMaxDodgeMs = INITIAL_MAX_DODGE_MS;
@@ -652,7 +666,11 @@ if (!composer || !input) {
   }
 
   function bindRunaway() {
-    if (document.body.dataset.character === "Rupin" || document.body.dataset.character === "Tom") {
+    if (
+      document.body.dataset.character === "Rupin" ||
+      document.body.dataset.character === "Pepper" ||
+      document.body.dataset.character === "F1"
+    ) {
       return;
     }
 

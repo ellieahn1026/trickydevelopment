@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PotterGPT — hackedGPT</title>
+    <title>F1GPT — hackedGPT</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
@@ -14,13 +14,13 @@
     <link rel="stylesheet" href="./orbit-kr.css" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body data-character="Potter">
+  <body data-character="F1">
     <div class="screen">
       <div class="stage">
         <svg class="composer-trail" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
           <path class="composer-trail__path" />
         </svg>
-        
+        <div class="f1-hourglass" aria-hidden="true"></div>
         <header class="brand">
           <a href="./index.html"><h1>hackedGPT</h1></a>
         </header>
@@ -29,13 +29,13 @@
           
           <button
             type="button"
-            class="character is-active"
+            class="character"
             data-name="Potter"
             data-color="#ff46ff"
             data-color-active="#ff46ff"
             data-color-hover="#ed23ed"
             data-href="./index.html"
-            aria-pressed="true"
+            aria-pressed="false"
             aria-label="Open Potter chat"
           >
             <span class="character__swatch" style="--swatch: #ff46ff; --swatch-active: #ff46ff; --swatch-hover: #ed23ed">
@@ -81,9 +81,9 @@
             <span class="character__label">Pepper</span>
           </button>
             <a
-              class="character character--f1"
+              class="character character--f1 is-active"
               href="./f1.html"
-              aria-current="false"
+              aria-current="page"
               aria-label="Open F1 chat"
             >
               <span class="character__swatch" style="--swatch: #ff670f; --swatch-active: #ff670f; --swatch-hover: #ea5600">
@@ -109,16 +109,16 @@
         <main class="chat-panel">
           <div class="chat-panel__thread" id="chat-thread" aria-live="polite"></div>
           <div class="chat-panel__composer" id="chat-composer">
-            <p class="prompt__headline" id="chat-headline" data-default-headline="You want to talk with me? Follow.">You want to talk with me? Follow.</p>
+            <p class="prompt__headline" id="chat-headline" data-default-headline="I know everything. Just Ask and Believe.">I know everything. Just Ask and Believe.</p>
             <form class="prompt__form" id="chat-form">
               <div class="prompt__field">
                 <input
                   type="text"
                   id="chat-input"
                   name="message"
-                  placeholder="Ask to PotterGPT"
+                  placeholder="Ask to F1GPT"
                   autocomplete="off"
-                  aria-label="Ask to PotterGPT"
+                  aria-label="Ask to F1GPT"
                 />
                 <button type="submit" class="prompt__send ">Send</button>
               </div>
