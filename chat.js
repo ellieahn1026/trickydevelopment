@@ -14,6 +14,7 @@ import {
   renderPotterActionAnswer,
   WITHDRAW_LABEL,
   END_LABEL,
+  SILENCE_LABEL,
 } from "./potter-action-ui.js";
 import {
   prepareAnswerTextForScrape,
@@ -26,6 +27,17 @@ import {
   notifyF1GenerationCancelled,
   notifyF1MessageSubmit,
 } from "./f1-composer-ui.js";
+import { hasStructuredAnswer } from "./answer-markdown.js";
+import {
+  buildAnswerSegments,
+  hasRenderableAnnotationSegments,
+  renderAnswer,
+} from "./answer-renderer.js";
+import {
+  createAssistantMessageId,
+  parseAssistantResult,
+  validateAssistantPayload,
+} from "./lib/assistant-result.ts";
 import potterLoadingIcon from "./assets/icons/potter-loading.svg";
 
 const character = document.body.dataset.character || "Potter";
@@ -56,9 +68,29 @@ const ERASE_HOLD_MS = 400;
 const ERASE_CHAR_MS = 28;
 const IGNORE_LABEL = "Hey, ignore.";
 const DOUBT_CHANCE = 0.85;
-const RESPONSE_MOODS = new Set(["happy", "sad", "common"]);
 
-/** @type {{ el: HTMLElement, text: string, mood?: "happy" | "sad" | "common", reviseFrom?: string, reviseTo?: string, reviseIgnore?: boolean, revised: boolean }[]} */
+/** @type {import("./lib/assistant-result.ts").ValidatedAssistantPayload["validation"]} */
+const EMPTY_ASSISTANT_VALIDATION = {
+  uncertainty: null,
+  revision: null,
+  annotations: [],
+};
+
+/**
+ * @type {Array<{
+ *   id: string;
+ *   responseId: string | null;
+ *   el: HTMLElement;
+ *   text: string;
+ *   mood?: "happy" | "sad" | "common";
+ *   assistantResult: import("./lib/assistant-result.ts").AssistantResult;
+ *   validation: import("./lib/assistant-result.ts").ValidatedAssistantPayload["validation"];
+ *   reviseFrom?: string;
+ *   reviseTo?: string;
+ *   reviseIgnore?: boolean;
+ *   revised: boolean;
+ * }>}
+ */
 const answerHistory = [];
 
 let generationToken = 0;
@@ -331,127 +363,9 @@ function clearAnswerLoadingState(el) {
   el.classList.remove("chat-answer--loading");
 }
 
-function appendInlineMarkdown(target, text) {
-  const pattern = /(\*\*[^*\n]+\*\*|`[^`\n]+`)/g;
-  let cursor = 0;
-
-  for (const match of text.matchAll(pattern)) {
-    const index = match.index ?? 0;
-    target.append(document.createTextNode(text.slice(cursor, index)));
-
-    const token = match[0];
-    const node = document.createElement(token.startsWith("**") ? "strong" : "code");
-    node.textContent = token.startsWith("**")
-      ? token.slice(2, -2)
-      : token.slice(1, -1);
-    target.appendChild(node);
-    cursor = index + token.length;
-  }
-
-  target.append(document.createTextNode(text.slice(cursor)));
-}
-
-function renderAnswerMarkdown(el, text) {
-  const lines = text.replace(/\r\n?/g, "\n").split("\n");
-  const fragment = document.createDocumentFragment();
-  let paragraphLines = [];
-  let list = null;
-  let codeLines = null;
-  let codeLanguage = "";
-
-  const flushParagraph = () => {
-    if (!paragraphLines.length) return;
-    const paragraph = document.createElement("p");
-    appendInlineMarkdown(paragraph, paragraphLines.join("\n"));
-    fragment.appendChild(paragraph);
-    paragraphLines = [];
-  };
-
-  const closeList = () => {
-    list = null;
-  };
-
-  lines.forEach((line) => {
-    const fence = line.match(/^\s*```\s*([\w-]*)\s*$/);
-    if (fence) {
-      flushParagraph();
-      closeList();
-
-      if (codeLines) {
-        const pre = document.createElement("pre");
-        const code = document.createElement("code");
-        if (codeLanguage) code.dataset.language = codeLanguage;
-        code.textContent = codeLines.join("\n");
-        pre.appendChild(code);
-        fragment.appendChild(pre);
-        codeLines = null;
-        codeLanguage = "";
-      } else {
-        codeLines = [];
-        codeLanguage = fence[1];
-      }
-      return;
-    }
-
-    if (codeLines) {
-      codeLines.push(line);
-      return;
-    }
-
-    if (!line.trim()) {
-      flushParagraph();
-      closeList();
-      return;
-    }
-
-    if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
-      flushParagraph();
-      closeList();
-      fragment.appendChild(document.createElement("hr"));
-      return;
-    }
-
-    const heading = line.match(/^\s*(#{1,3})\s+(.+)$/);
-    if (heading) {
-      flushParagraph();
-      closeList();
-      const node = document.createElement(`h${heading[1].length + 2}`);
-      appendInlineMarkdown(node, heading[2]);
-      fragment.appendChild(node);
-      return;
-    }
-
-    const item = line.match(/^\s*(?:([-*+])|(\d+)[.)])\s+(.+)$/);
-    if (item) {
-      flushParagraph();
-      const tag = item[2] ? "ol" : "ul";
-      if (!list || list.tagName.toLowerCase() !== tag) {
-        list = document.createElement(tag);
-        fragment.appendChild(list);
-      }
-      const listItem = document.createElement("li");
-      appendInlineMarkdown(listItem, item[3]);
-      list.appendChild(listItem);
-      return;
-    }
-
-    closeList();
-    paragraphLines.push(line);
-  });
-
-  if (codeLines) {
-    paragraphLines.push(`\`\`\`${codeLanguage}`, ...codeLines);
-  }
-  flushParagraph();
-
-  el.classList.add("chat-answer--formatted");
-  el.replaceChildren(fragment);
-}
-
-function hasStructuredAnswer(text) {
-  return (
-    text.includes("\n") ||
-    /^\s*(?:#{1,3}\s+|[-*+]\s+|\d+[.)]\s+|```)/m.test(text)
+function answerHasAnnotationSegments(text, annotations = []) {
+  return hasRenderableAnnotationSegments(
+    buildAnswerSegments(text, annotations),
   );
 }
 
@@ -587,25 +501,28 @@ async function appendAnswer(reply, token = generationToken, answerMood = null) {
   el.classList.remove("is-generating");
 
   const isStructured = hasStructuredAnswer(fullText);
+  const annotations = typeof reply === "object" ? reply.annotations ?? [] : [];
   if (
     character === "Pepper" &&
     !isStructured &&
+    !answerHasAnnotationSegments(fullText, annotations) &&
     answerMood &&
     answerMood !== "common"
   ) {
     applyPepperAnswerMood(el, fullText, answerMood);
   } else {
-    renderAnswerMarkdown(el, fullText);
+    renderAnswer(el, fullText, annotations);
   }
 
-  answerHistory.push({
-    el,
-    text: fullText,
-    reviseFrom: reply.reviseFrom,
-    reviseTo: reply.reviseTo,
-    reviseIgnore: reply.reviseIgnore,
-    revised: false,
-  });
+  answerHistory.push(
+    createAssistantHistoryEntry({
+      el,
+      text: fullText,
+      reviseFrom: reply.reviseFrom,
+      reviseTo: reply.reviseTo,
+      reviseIgnore: reply.reviseIgnore,
+    }),
+  );
 
   scrollThreadToLatest();
   return el;
@@ -787,14 +704,15 @@ async function appendAnswerWithInterleavedRevision(reply, token = generationToke
 
   el.classList.remove("is-generating");
 
-  answerHistory.push({
-    el,
-    text: fullText,
-    reviseFrom: reply.reviseFrom,
-    reviseTo: reply.reviseTo,
-    reviseIgnore: reply.reviseIgnore,
-    revised: false,
-  });
+  answerHistory.push(
+    createAssistantHistoryEntry({
+      el,
+      text: fullText,
+      reviseFrom: reply.reviseFrom,
+      reviseTo: reply.reviseTo,
+      reviseIgnore: reply.reviseIgnore,
+    }),
+  );
 
   scrollThreadToLatest();
   return el;
@@ -809,6 +727,98 @@ function parseServerSentEvent(block) {
 
   if (!data || data === "[DONE]") return null;
   return JSON.parse(data);
+}
+
+function findAssistantMessageById(messageId) {
+  const trimmed = messageId?.trim();
+  if (!trimmed) return undefined;
+
+  return answerHistory.find(
+    (entry) => entry.id === trimmed || entry.responseId === trimmed,
+  );
+}
+
+function logAssistantValidation(validation, responseId) {
+  if (validation.uncertainty && !validation.uncertainty.valid) {
+    logInteraction("assistant.uncertainty.invalid", {
+      responseId,
+      reason: validation.uncertainty.reason,
+    });
+  }
+
+  if (validation.revision && !validation.revision.valid) {
+    logInteraction("assistant.revision.invalid", {
+      responseId,
+      reason: validation.revision.reason,
+      resolvedMessageId: validation.revision.resolvedMessageId ?? null,
+    });
+  }
+
+  for (const annotationValidation of validation.annotations ?? []) {
+    if (!annotationValidation.valid) {
+      logInteraction("assistant.annotation.invalid", {
+        responseId,
+        annotationId: annotationValidation.id,
+        reason: annotationValidation.reason,
+      });
+    }
+  }
+}
+
+function getPriorAssistantTexts() {
+  return answerHistory.map((entry) => entry.text);
+}
+
+function parseAndValidateChatAnswer(rawJson) {
+  const parsed = parseAssistantResult(rawJson);
+  if (!parsed.answer.trim()) {
+    throw createRetryableChatError(
+      "Chat response was empty.",
+      "empty_answer",
+    );
+  }
+
+  const validated = validateAssistantPayload(
+    parsed,
+    findAssistantMessageById,
+    { priorAssistantTexts: getPriorAssistantTexts() },
+  );
+  return validated;
+}
+
+function createAssistantHistoryEntry({
+  el,
+  text,
+  mood = "common",
+  responseId = null,
+  assistantResult = null,
+  validation = EMPTY_ASSISTANT_VALIDATION,
+  revised = false,
+  reviseFrom,
+  reviseTo,
+  reviseIgnore,
+}) {
+  const entry = {
+    id: createAssistantMessageId(responseId),
+    responseId,
+    el,
+    text,
+    mood,
+    assistantResult: assistantResult ?? {
+      answer: text,
+      annotations: [],
+      uncertainty: null,
+      revision: null,
+    },
+    validation,
+    revised,
+  };
+
+  if (reviseFrom !== undefined) entry.reviseFrom = reviseFrom;
+  if (reviseTo !== undefined) entry.reviseTo = reviseTo;
+  if (reviseIgnore !== undefined) entry.reviseIgnore = reviseIgnore;
+
+  return entry;
 }
 
 function stripMoodLabel(text, isPartial = false) {
@@ -880,35 +890,6 @@ function extractPartialAnswer(rawJson) {
   }
 }
 
-function parseStructuredChatAnswer(rawJson) {
-  let result;
-
-  try {
-    result = JSON.parse(rawJson);
-  } catch {
-    throw createRetryableChatError(
-      "Chat response was not valid structured JSON.",
-      "invalid_structured_json",
-    );
-  }
-
-  if (
-    !result ||
-    typeof result.answer !== "string" ||
-    !RESPONSE_MOODS.has(result.mood)
-  ) {
-    throw createRetryableChatError(
-      "Chat response did not match the required mood schema.",
-      "invalid_mood_schema",
-    );
-  }
-
-  return {
-    text: stripMoodLabel(result.answer),
-    mood: result.mood,
-  };
-}
-
 async function fetchChatReply(message, token, onDelta) {
   fetchController?.abort();
   fetchController = new AbortController();
@@ -965,7 +946,7 @@ async function fetchChatReply(message, token, onDelta) {
       if (typeof result.text === "string" && result.text.trim()) {
         potterMessages.push({ role: "assistant", content: result.text });
       } else if (result.action === "silence") {
-        potterMessages.push({ kind: "behavior", action: "silence" });
+        potterMessages.push({ role: "assistant", content: SILENCE_LABEL });
       }
     }
 
@@ -1086,7 +1067,7 @@ async function fetchChatReply(message, token, onDelta) {
     let finalText = potterComplete.text ?? "";
     if (!finalText.trim() && text.trim()) {
       try {
-        finalText = parseStructuredChatAnswer(text).text;
+        finalText = parseAssistantResult(text).answer;
       } catch {
         finalText = extractPartialAnswer(text) ?? "";
       }
@@ -1095,7 +1076,7 @@ async function fetchChatReply(message, token, onDelta) {
     if (finalText.trim()) {
       potterMessages.push({ role: "assistant", content: finalText });
     } else if (potterComplete.action === "silence") {
-      potterMessages.push({ kind: "behavior", action: "silence" });
+      potterMessages.push({ role: "assistant", content: SILENCE_LABEL });
     }
 
     return {
@@ -1117,13 +1098,28 @@ async function fetchChatReply(message, token, onDelta) {
     throw new Error("Chat response was empty.");
   }
 
-  const answer = parseStructuredChatAnswer(text);
+  const validated = parseAndValidateChatAnswer(text);
+  logAssistantValidation(validated.validation, responseId);
 
   if (responseId) {
     previousResponseIds[character] = responseId;
   }
 
-  return answer;
+  const messageId = createAssistantMessageId(responseId);
+
+  return {
+    text: validated.answer,
+    mood: validated.mood,
+    responseId: responseId || null,
+    messageId,
+    assistantResult: {
+      answer: validated.answer,
+      annotations: validated.annotations,
+      uncertainty: validated.uncertainty,
+      revision: validated.revision,
+    },
+    validation: validated.validation,
+  };
 }
 
 async function fetchChatReplyWithRetry(message, token, onDelta, onRetry) {
@@ -1199,9 +1195,7 @@ async function appendStreamingAnswer(
         textLength: answer.text?.length ?? 0,
       });
 
-      if (answer.action !== "silence") {
-        beginCharacterSpeaking();
-      }
+      beginCharacterSpeaking();
 
       await renderPotterActionAnswer({
         el,
@@ -1210,25 +1204,25 @@ async function appendStreamingAnswer(
         questionEl: lastQuestionEl,
         isCancelled: () => isCancelled(token),
         onScroll: scrollThreadToLatest,
+        renderText: (target, content) => renderAnswer(target, content),
       });
-
-      if (answer.action === "silence") {
-        return { el, conversationEnded: false };
-      }
 
       const recordText =
         answer.action === "withdraw"
           ? answer.text?.trim() || WITHDRAW_LABEL
           : answer.action === "end"
             ? answer.text || END_LABEL
-            : answer.text;
+            : answer.action === "silence"
+              ? SILENCE_LABEL
+              : answer.text;
 
-      answerHistory.push({
-        el,
-        text: recordText,
-        mood: "common",
-        revised: false,
-      });
+      answerHistory.push(
+        createAssistantHistoryEntry({
+          el,
+          text: recordText,
+          mood: "common",
+        }),
+      );
 
       if (answer.action === "end") {
         handlePotterConversationEnd(answer);
@@ -1245,21 +1239,36 @@ async function appendStreamingAnswer(
 
     const answerMood = answer.mood;
     el.dataset.answerMood = answerMood;
+    const annotations = answer.assistantResult?.annotations ?? [];
     const isStructured = hasStructuredAnswer(answer.text);
+    const usesAnnotationRenderer = answerHasAnnotationSegments(
+      answer.text,
+      annotations,
+    );
 
     if (character === "Pepper") {
       applyMood(answerMood);
-      if (!isStructured) {
+      if (!isStructured && !usesAnnotationRenderer && answerMood !== "common") {
         applyPepperAnswerMood(el, answer.text, answerMood);
       }
     }
 
-    if (character !== "Pepper" || isStructured || answerMood === "common") {
-      renderAnswerMarkdown(el, answer.text);
+    if (
+      character !== "Pepper" ||
+      isStructured ||
+      answerMood === "common" ||
+      usesAnnotationRenderer
+    ) {
+      renderAnswer(el, answer.text, annotations);
     }
 
     logInteraction("answer.received", {
       mood: answerMood,
+      messageId: answer.messageId,
+      responseId: answer.responseId,
+      hasUncertainty: Boolean(answer.assistantResult?.uncertainty),
+      hasRevision: Boolean(answer.assistantResult?.revision),
+      annotationCount: answer.assistantResult?.annotations?.length ?? 0,
       uiMood: character === "Pepper" ? document.body.dataset.pepperMood ?? null : null,
       textLength: answer.text?.length ?? 0,
       isPushback,
@@ -1274,12 +1283,16 @@ async function appendStreamingAnswer(
       }
     }
 
-    answerHistory.push({
-      el,
-      text: answer.text,
-      mood: answerMood,
-      revised: false,
-    });
+    answerHistory.push(
+      createAssistantHistoryEntry({
+        el,
+        text: answer.text,
+        mood: answerMood,
+        responseId: answer.responseId,
+        assistantResult: answer.assistantResult,
+        validation: answer.validation,
+      }),
+    );
 
     return { el, conversationEnded: false };
   } catch (error) {

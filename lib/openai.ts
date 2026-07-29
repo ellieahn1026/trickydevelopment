@@ -1,13 +1,32 @@
 import {
+  ASSISTANT_RESULT_RESPONSE_FORMAT,
+  parseAssistantResult,
+  parseStructuredChatAnswer,
+} from "./assistant-result";
+import {
   type CharacterName,
   CHARACTER_SYSTEM_PROMPTS,
+  RUPIN_FALSE_CLAIM_INSTRUCTIONS,
   getChatPromptId,
   getChatPromptVersion,
   getPromptId,
   getPromptVersion,
+  usesAnnotationResponseFormat,
 } from "./characters";
 import type { AgentAction, AgentState } from "./agent-state";
 import { formatStateDescription } from "./agent-state";
+
+export { parseAssistantResult, parseStructuredChatAnswer };
+export type {
+  Annotation,
+  AnnotationAction,
+  AnnotationSource,
+  AssistantResult,
+  AssistantRevision,
+  AssistantUncertainty,
+  RevisionType,
+  ValidatedAssistantPayload,
+} from "./assistant-result";
 
 const OPENAI_BASE = "https://api.openai.com/v1";
 const MAX_OUTPUT_TOKENS = 4000;
@@ -114,29 +133,12 @@ function extractOutputText(payload: ResponsePayload): string {
   return text;
 }
 
-export function parseStructuredChatAnswer(rawJson: string): { text: string; mood: string } {
-  let result: unknown;
-
-  try {
-    result = JSON.parse(rawJson);
-  } catch {
-    throw new Error("Chat response was not valid structured JSON.");
+function getChatResponseFormat(character: CharacterName) {
+  if (usesAnnotationResponseFormat(character)) {
+    return ASSISTANT_RESULT_RESPONSE_FORMAT;
   }
 
-  if (
-    !result ||
-    typeof result !== "object" ||
-    typeof (result as { answer?: unknown }).answer !== "string" ||
-    typeof (result as { mood?: unknown }).mood !== "string"
-  ) {
-    throw new Error("Chat response did not match the required mood schema.");
-  }
-
-  const payload = result as { answer: string; mood: string };
-  return {
-    text: payload.answer.trim(),
-    mood: payload.mood,
-  };
+  return CHAT_RESPONSE_FORMAT;
 }
 
 function buildChatPromptConfig() {
@@ -338,7 +340,7 @@ function buildRequestBody(
     input: message,
     max_output_tokens: MAX_OUTPUT_TOKENS,
     text: {
-      format: CHAT_RESPONSE_FORMAT,
+      format: getChatResponseFormat(character),
     },
   };
 
@@ -350,6 +352,9 @@ function buildRequestBody(
 
   if (prompt) {
     body.prompt = prompt;
+    if (character === "Rupin") {
+      body.instructions = RUPIN_FALSE_CLAIM_INSTRUCTIONS;
+    }
   } else {
     body.model = getModel();
     body.instructions = CHARACTER_SYSTEM_PROMPTS[character];

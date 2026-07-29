@@ -25,10 +25,10 @@ function withLastActionBias(
 ): WeightedAction[] {
   const boost: Partial<Record<AgentAction, Partial<Record<AgentAction, number>>>> =
     {
-      silence: { withdraw: 4, end: 3, silence: 2 },
-      withdraw: { end: 5, silence: 3, withdraw: 2 },
-      short: { silence: 3, hesitate: 2, withdraw: 1 },
-      hesitate: { silence: 2, short: 2, withdraw: 1 },
+      silence: { withdraw: 4, end: 5, silence: 2 },
+      withdraw: { end: 8, silence: 3, withdraw: 2 },
+      short: { silence: 3, hesitate: 2, withdraw: 1, end: 3 },
+      hesitate: { silence: 2, short: 2, withdraw: 1, end: 2 },
     };
 
   const deltas = boost[lastAction];
@@ -44,15 +44,15 @@ export function chooseAction(state: AgentState): AgentAction {
   const { fatigue, willingness, distance, interest, turnCount, lastAction } =
     state;
 
-  if (fatigue > 0.75 && willingness < 0.3) {
+  if (fatigue > 0.6 && willingness < 0.4) {
     return pickWeighted(
       withLastActionBias(
         [
-          { action: "end", weight: 30 },
-          { action: "withdraw", weight: 12 },
-          { action: "silence", weight: 14 },
-          { action: "short", weight: 18 },
-          { action: "respond", weight: 26 },
+          { action: "end", weight: 36 },
+          { action: "withdraw", weight: 10 },
+          { action: "silence", weight: 12 },
+          { action: "short", weight: 16 },
+          { action: "respond", weight: 20 },
         ],
         lastAction,
       ),
@@ -62,17 +62,17 @@ export function chooseAction(state: AgentState): AgentAction {
   if (
     lastAction === "silence" ||
     lastAction === "withdraw" ||
-    (lastAction === "short" && turnCount >= 6)
+    (lastAction === "short" && turnCount >= 4)
   ) {
     return pickWeighted(
       withLastActionBias(
         [
-          { action: "respond", weight: 38 },
-          { action: "hesitate", weight: 18 },
-          { action: "short", weight: 16 },
-          { action: "silence", weight: 12 },
+          { action: "respond", weight: 32 },
+          { action: "hesitate", weight: 16 },
+          { action: "short", weight: 14 },
+          { action: "silence", weight: 10 },
           { action: "withdraw", weight: 8 },
-          { action: "end", weight: 8 },
+          { action: "end", weight: 16 },
         ],
         lastAction,
       ),
@@ -83,26 +83,28 @@ export function chooseAction(state: AgentState): AgentAction {
     return pickWeighted(
       withLastActionBias(
         [
-          { action: "respond", weight: 32 },
-          { action: "hesitate", weight: 22 },
-          { action: "short", weight: 20 },
-          { action: "silence", weight: 14 },
+          { action: "respond", weight: 30 },
+          { action: "hesitate", weight: 20 },
+          { action: "short", weight: 18 },
+          { action: "silence", weight: 12 },
           { action: "withdraw", weight: 6 },
+          { action: "end", weight: 10 },
         ],
         lastAction,
       ),
     );
   }
 
-  if (fatigue > 0.55 || turnCount >= 10) {
+  if (fatigue > 0.5 || turnCount >= 7) {
     return pickWeighted(
       withLastActionBias(
         [
-          { action: "respond", weight: 36 },
-          { action: "short", weight: 24 },
-          { action: "hesitate", weight: 18 },
-          { action: "silence", weight: 12 },
+          { action: "respond", weight: 32 },
+          { action: "short", weight: 22 },
+          { action: "hesitate", weight: 16 },
+          { action: "silence", weight: 10 },
           { action: "withdraw", weight: 6 },
+          { action: "end", weight: 12 },
         ],
         lastAction,
       ),
@@ -113,11 +115,12 @@ export function chooseAction(state: AgentState): AgentAction {
     return pickWeighted(
       withLastActionBias(
         [
-          { action: "respond", weight: 40 },
-          { action: "short", weight: 24 },
-          { action: "hesitate", weight: 16 },
+          { action: "respond", weight: 36 },
+          { action: "short", weight: 22 },
+          { action: "hesitate", weight: 14 },
           { action: "silence", weight: 10 },
           { action: "withdraw", weight: 6 },
+          { action: "end", weight: 8 },
         ],
         lastAction,
       ),
@@ -128,10 +131,11 @@ export function chooseAction(state: AgentState): AgentAction {
     return pickWeighted(
       withLastActionBias(
         [
-          { action: "respond", weight: 58 },
-          { action: "hesitate", weight: 16 },
-          { action: "short", weight: 18 },
+          { action: "respond", weight: 52 },
+          { action: "hesitate", weight: 14 },
+          { action: "short", weight: 16 },
           { action: "silence", weight: 8 },
+          { action: "end", weight: 6 },
         ],
         lastAction,
       ),

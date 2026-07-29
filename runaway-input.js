@@ -28,7 +28,13 @@ const PENALTY_MAX_CATCH_MS = 10_000;
 const END_RUNAWAY_MAX_MS = 15_000;
 const SEND_LEAVE_DIST = 72;
 const COMPOSER_MIN_W = 286;
-const COMPOSER_MAX_W = 832;
+const COMPOSER_MAX_W_FALLBACK = 1000;
+
+function getComposerMaxW() {
+  const raw = getComputedStyle(document.body).getPropertyValue("--composer-w").trim();
+  const parsed = parseFloat(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : COMPOSER_MAX_W_FALLBACK;
+}
 
 const composer = document.querySelector(".chat-panel__composer");
 const input = document.getElementById("chat-input");
@@ -191,7 +197,8 @@ if (!composer || !input) {
   function measureSize() {
     const { laneWidth } = getBounds();
     const travelRoom = Math.max(120, laneWidth * 0.32);
-    let targetW = Math.max(COMPOSER_MIN_W, Math.min(COMPOSER_MAX_W, laneWidth - travelRoom));
+    const composerMaxW = getComposerMaxW();
+    let targetW = Math.max(COMPOSER_MIN_W, Math.min(composerMaxW, laneWidth - travelRoom));
     targetW = Math.min(targetW, laneWidth);
 
     composer.style.width = `${targetW}px`;

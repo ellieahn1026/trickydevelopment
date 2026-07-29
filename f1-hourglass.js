@@ -136,8 +136,8 @@ function grainPosition(index, progress, direction) {
   const fallT = (local - FALL_HOLD) / (1 - FALL_HOLD);
   const eased = easeInGravity(fallT);
   const step = Math.min(
-    FALL_STEPS - 1,
-    Math.floor(eased * FALL_STEPS),
+    path.length - 1,
+    Math.min(FALL_STEPS - 1, Math.floor(eased * FALL_STEPS)),
   );
   return path[step];
 }

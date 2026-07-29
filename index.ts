@@ -9,6 +9,7 @@ import {
   type ConversationHistoryEntry,
 } from "./lib/conversation";
 import { generateChatReplyStream } from "./lib/openai";
+import { handleF1ChatStream, resolveAgentState } from "./src/index.ts";
 
 const port = Number(process.env.PORT) || 3000;
 
@@ -63,6 +64,21 @@ Bun.serve({
               message,
               messages: body.messages,
               agentState: body.agentState,
+            });
+            return new Response(stream, {
+              status: 200,
+              headers: {
+                "Content-Type": "text/event-stream; charset=utf-8",
+                "Cache-Control": "no-cache, no-transform",
+              },
+            });
+          }
+
+          if (character === "F1") {
+            const stream = await handleF1ChatStream({
+              message,
+              agentState: resolveAgentState(body.agentState),
+              previousResponseId,
             });
             return new Response(stream, {
               status: 200,

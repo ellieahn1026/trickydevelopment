@@ -2,9 +2,11 @@ import { logInteraction } from "./interaction-log.js";
 
 const WITHDRAW_LABEL = "Not interested.";
 const END_LABEL = "conversation over";
+const SILENCE_LABEL = "Why are you saying silly things?";
 const HESITATE_PREFIX = "hmm...";
 const HESITATE_DURATION_MS = 5000;
 const QUESTION_DISMISS_MS = 420;
+const QUESTION_SILENCE_EJECT_MS = 580;
 const SHORT_GRAVITY = 3400;
 const SHORT_DROP_START = -180;
 
@@ -61,6 +63,36 @@ function animateGravityDrop(el, isCancelled) {
   });
 }
 
+function ejectQuestion(questionEl, isCancelled) {
+  return new Promise((resolve, reject) => {
+    if (!questionEl?.isConnected) {
+      resolve();
+      return;
+    }
+
+    logInteraction("potter.question.silence_eject");
+
+    questionEl.classList.add("is-potter-silence-eject");
+
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      questionEl.removeEventListener("animationend", settle);
+      questionEl.remove();
+
+      if (isCancelled?.()) {
+        reject(new DOMException("Aborted", "AbortError"));
+        return;
+      }
+      resolve();
+    };
+
+    questionEl.addEventListener("animationend", settle);
+    window.setTimeout(settle, QUESTION_SILENCE_EJECT_MS + 80);
+  });
+}
+
 function dismissQuestion(questionEl, isCancelled) {
   return new Promise((resolve, reject) => {
     if (!questionEl?.isConnected) {
@@ -108,9 +140,15 @@ export function clearConversationEndDivider(chatPanel) {
     ?.remove();
 }
 
-async function renderSilence(el, questionEl, isCancelled, onScroll) {
-  await dismissQuestion(questionEl, isCancelled);
-  el.remove();
+async function renderSilence(el, questionEl, isCancelled, onScroll, renderText) {
+  await ejectQuestion(questionEl, isCancelled);
+
+  el.className = "chat-answer";
+  if (renderText) {
+    renderText(el, SILENCE_LABEL);
+  } else {
+    el.textContent = SILENCE_LABEL;
+  }
   onScroll?.();
 }
 
@@ -123,7 +161,7 @@ async function renderShort(el, text, isCancelled, onScroll) {
   await wait(280, isCancelled);
 }
 
-async function renderHesitate(el, text, isCancelled, onScroll) {
+async function renderHesitate(el, text, isCancelled, onScroll, renderText) {
   const content = text.trim() || el.textContent.trim() || "…";
 
   el.className = "chat-answer chat-answer--hesitate";
@@ -132,9 +170,13 @@ async function renderHesitate(el, text, isCancelled, onScroll) {
 
   await wait(HESITATE_DURATION_MS, isCancelled);
 
-  el.textContent = content;
+  el.className = "chat-answer";
+  if (renderText) {
+    renderText(el, content);
+  } else {
+    el.textContent = content;
+  }
   onScroll?.();
-  await wait(Math.min(1200, 180 + content.length * 24), isCancelled);
 }
 
 async function renderWithdraw(el, questionEl, text, isCancelled, onScroll) {
@@ -182,18 +224,19 @@ export async function renderPotterActionAnswer({
   questionEl,
   isCancelled,
   onScroll,
+  renderText,
 }) {
   logInteraction("potter.action.render", { action, textLength: text?.length ?? 0 });
 
   switch (action) {
     case "silence":
-      await renderSilence(el, questionEl, isCancelled, onScroll);
+      await renderSilence(el, questionEl, isCancelled, onScroll, renderText);
       return true;
     case "short":
       await renderShort(el, text, isCancelled, onScroll);
       return true;
     case "hesitate":
-      await renderHesitate(el, text, isCancelled, onScroll);
+      await renderHesitate(el, text, isCancelled, onScroll, renderText);
       return true;
     case "withdraw":
       await renderWithdraw(el, questionEl, text, isCancelled, onScroll);
@@ -207,4 +250,4 @@ export async function renderPotterActionAnswer({
   }
 }
 
-export { WITHDRAW_LABEL, END_LABEL };
+export { WITHDRAW_LABEL, END_LABEL, SILENCE_LABEL };

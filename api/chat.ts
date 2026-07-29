@@ -4,6 +4,7 @@ import {
   type ConversationHistoryEntry,
 } from "../lib/conversation";
 import { generateChatReplyStream } from "../lib/openai";
+import { handleF1ChatStream, resolveAgentState } from "../src/index.ts";
 
 export default async function handler(req: any, res: any) {
   if (req.method !== "POST") {
@@ -35,6 +36,26 @@ export default async function handler(req: any, res: any) {
         message,
         messages,
         agentState: body.agentState,
+      });
+
+      res.status(200);
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
+      res.flushHeaders?.();
+
+      for await (const chunk of stream) {
+        res.write(Buffer.from(chunk));
+      }
+
+      return res.end();
+    }
+
+    if (character === "F1") {
+      const stream = await handleF1ChatStream({
+        message,
+        agentState: resolveAgentState(body.agentState),
+        previousResponseId,
       });
 
       res.status(200);
