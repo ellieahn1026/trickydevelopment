@@ -138,9 +138,9 @@ function parseSseBlock(block: string): { type?: string; delta?: string; response
 
 async function preparePotterTurn(input: PotterChatRequest) {
   const previousState = resolveAgentState(input.agentState);
-  const conversation = formatConversation(
-    buildConversationHistory(input.messages, input.message),
-  );
+  const history = buildConversationHistory(input.messages, input.message);
+  const conversation = formatConversation(history);
+  const responsesInput = buildPotterResponsesInput(input.messages, input.message);
 
   const evaluation = await evaluateMessage({
     message: input.message,
@@ -172,13 +172,13 @@ async function preparePotterTurn(input: PotterChatRequest) {
     conversationOpen: nextState.conversationOpen,
   });
 
-  return { conversation, action, nextState, evaluation };
+  return { conversation, responsesInput, action, nextState, evaluation };
 }
 
 export async function handlePotterChatStream(
   input: PotterChatRequest,
 ): Promise<ReadableStream<Uint8Array>> {
-  const { conversation, action, nextState, evaluation } =
+  const { conversation, responsesInput, action, nextState, evaluation } =
     await preparePotterTurn(input);
 
   const turnEvent = {
@@ -209,6 +209,7 @@ export async function handlePotterChatStream(
   const upstream = await generatePotterChatReplyStream({
     message: input.message,
     conversation,
+    responsesInput,
     behavior: action,
     state: nextState,
   });
@@ -323,10 +324,29 @@ function buildConversationHistory(
   return [...history, { role: "user", content: message }];
 }
 
+export type PotterResponsesInputItem = {
+  role: ChatMessage["role"];
+  content: string;
+};
+
+/** Multi-turn OpenAI Responses `input` built from client history + current message. */
+export function buildPotterResponsesInput(
+  messages: ConversationHistoryEntry[] | undefined,
+  message: string,
+): PotterResponsesInputItem[] {
+  return buildConversationHistory(messages, message)
+    .filter(isChatMessage)
+    .map((entry) => ({
+      role: entry.role,
+      content: entry.content.trim(),
+    }))
+    .filter((entry) => entry.content.length > 0);
+}
+
 export async function handlePotterChat(
   input: PotterChatRequest,
 ): Promise<PotterChatResult> {
-  const { conversation, action, nextState, evaluation } =
+  const { conversation, responsesInput, action, nextState, evaluation } =
     await preparePotterTurn(input);
 
   if (action === "silence") {
@@ -340,6 +360,7 @@ export async function handlePotterChat(
   const reply = await generatePotterChatReply({
     message: input.message,
     conversation,
+    responsesInput,
     behavior: action,
     state: nextState,
   });

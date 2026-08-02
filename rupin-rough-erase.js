@@ -1,7 +1,7 @@
 const SHAKE_MS = 130;
 const DETACH_JITTER_MS = 45;
 const SETTLE_MS = 220;
-const BUCKET_COUNT = 56;
+const BUCKET_COUNT = 96;
 
 const pileState = {
   el: null,
@@ -150,66 +150,83 @@ function bucketHeight(bucket) {
   return pileState.buckets.get(bucket) ?? 0;
 }
 
+function totalBucketFill() {
+  let total = 0;
+  for (const height of pileState.buckets.values()) {
+    total += height;
+  }
+  return total;
+}
+
 function raiseBucket(bucket) {
   const next = bucketHeight(bucket) + 1;
   pileState.buckets.set(bucket, next);
   return next;
 }
 
-function findLowestNearbyBucket(originBucket, stackLayer) {
-  const radius = 1 + Math.min(6, Math.floor(stackLayer / 1.5));
-  let bestBucket = originBucket;
-  let bestHeight = bucketHeight(originBucket);
+function findLowestNearbyBucket(originBucket) {
+  const stackPressure = totalBucketFill();
+  const radius = 6 + Math.min(28, Math.floor(stackPressure * 0.35 + 8));
+  let minHeight = Infinity;
+  const candidates = [];
 
   for (let offset = -radius; offset <= radius; offset += 1) {
     const candidate = originBucket + offset;
     if (candidate < 0 || candidate >= BUCKET_COUNT) continue;
 
     const height = bucketHeight(candidate);
-    if (height < bestHeight) {
-      bestHeight = height;
-      bestBucket = candidate;
+    if (height < minHeight) {
+      minHeight = height;
+      candidates.length = 0;
+      candidates.push(candidate);
+    } else if (height === minHeight) {
+      candidates.push(candidate);
     }
   }
 
-  return { bucket: bestBucket, stackLayer: bestHeight };
+  const bucket =
+    candidates[Math.floor(Math.random() * candidates.length)] ?? originBucket;
+
+  return { bucket, stackLayer: minHeight };
 }
 
-/** Land under source; as pile grows, spill sideways and slide outward. */
+/** Land across the thread width; prefer low stacks and spread as the pile grows. */
 function resolveLanding(pileBounds, pieceWidth, pieceHeight, sourceRect) {
   const minX = pileBounds.left;
   const maxX = pileBounds.right - pieceWidth;
   const innerWidth = Math.max(pileBounds.width - pieceWidth, 1);
-  const sourceCenter = sourceRect.left + sourceRect.width / 2;
   const bucketWidth = innerWidth / BUCKET_COUNT;
+  const pileFill = totalBucketFill();
+  const spreadFactor = Math.min(0.88, 0.34 + pileFill * 0.055);
 
-  const originBucket = bucketIndexForX(sourceCenter - pileBounds.left, innerWidth);
-  let originHeight = bucketHeight(originBucket);
+  const sourceCenter = sourceRect.left + sourceRect.width / 2;
+  const sourceNorm = clampX(sourceCenter - pileBounds.left, 0, innerWidth) / innerWidth;
+  const randomNorm = Math.random();
+  const targetNorm = sourceNorm * (1 - spreadFactor) + randomNorm * spreadFactor;
+  const targetCenter = pileBounds.left + targetNorm * innerWidth;
 
-  const { bucket, stackLayer: baseLayer } = findLowestNearbyBucket(
-    originBucket,
-    originHeight,
-  );
+  const originBucket = bucketIndexForX(targetCenter - pileBounds.left, innerWidth);
+  const { bucket } = findLowestNearbyBucket(originBucket);
 
-  const spreadStrength = Math.min(1, baseLayer * 0.14 + originHeight * 0.08);
   const bucketCenter = pileBounds.left + bucket * bucketWidth + bucketWidth * 0.5;
-  const spreadRange = bucketWidth * (0.35 + spreadStrength * 1.6);
-  let landX = clampX(bucketCenter - pieceWidth / 2 + (Math.random() - 0.5) * spreadRange, minX, maxX);
+  const spreadRange = bucketWidth * (1.1 + spreadFactor * 2.8 + Math.random() * 0.9);
+  const landX = clampX(
+    bucketCenter - pieceWidth / 2 + (Math.random() - 0.5) * spreadRange * 2,
+    minX,
+    maxX,
+  );
 
   const stackLayer = raiseBucket(bucket);
 
-  const layerHeight = Math.max(pieceHeight * 0.38, 8);
+  const layerHeight = Math.max(pieceHeight * 0.34, 7);
   const floorY = pileBounds.bottom - 6;
   const landY = floorY - pieceHeight - stackLayer * layerHeight;
 
-  const pileCenter = pileBounds.left + innerWidth * 0.5;
-  const outward = landX <= pileCenter ? -1 : 1;
   const slideX =
-    outward * (10 + stackLayer * 5 + spreadStrength * 24) +
-    (Math.random() - 0.5) * (8 + spreadStrength * 14);
-  const slideY = 2 + Math.random() * 4 + stackLayer * 0.35;
+    (Math.random() - 0.5) * (18 + spreadFactor * 46 + stackLayer * 2.5);
+  const slideY = 1 + Math.random() * 5 + stackLayer * 0.28;
 
-  return { landX, landY, slideX, slideY, stackLayer };
+  return { landX, landY, slideX, slideY, stackLayer, spreadFactor };
 }
 
 function gravityFallKeyframes(startX, startY, endX, endY, spin, skew, swayX) {
@@ -287,7 +304,7 @@ async function spawnFallingPiece(unit, sourceRect, { delayMs = 0 } = {}) {
 
   const pieceRect = piece.getBoundingClientRect();
   const pileBounds = getPileBounds(pile);
-  const { landX, landY, slideX, slideY } = resolveLanding(
+  const { landX, landY, slideX, slideY, spreadFactor } = resolveLanding(
     pileBounds,
     pieceRect.width,
     pieceRect.height,
@@ -297,9 +314,9 @@ async function spawnFallingPiece(unit, sourceRect, { delayMs = 0 } = {}) {
   const endX = landX + slideX;
   const endY = landY + slideY;
   const dropY = endY - startY;
-  const swayX = (Math.random() - 0.5) * 18;
-  const spin = (Math.random() - 0.5) * 40;
-  const skew = (Math.random() - 0.5) * 6;
+  const swayX = (Math.random() - 0.5) * (24 + spreadFactor * 52);
+  const spin = (Math.random() - 0.5) * 48;
+  const skew = (Math.random() - 0.5) * 8;
   const fallMs = 520 + Math.sqrt(Math.max(dropY, 80)) * 28 + Math.random() * 120;
 
   await waitForNextFrame();
@@ -347,13 +364,13 @@ async function scrapeFallPhrase(phraseEl, token, { wait, isAborted, onFrame }) {
   await wait(SHAKE_MS, token);
   if (isAborted(token)) throw new DOMException("Aborted", "AbortError");
 
-  const fallPromises = units.map((unit) => {
+  const fallPromises = units.map((unit, index) => {
     const rect = unit.getBoundingClientRect();
     unit.dataset.scraped = "true";
     unit.classList.add("is-scraped");
     unit.style.visibility = "hidden";
 
-    const delayMs = Math.random() * DETACH_JITTER_MS;
+    const delayMs = index * 8 + Math.random() * DETACH_JITTER_MS;
     return spawnFallingPiece(unit, rect, { delayMs });
   });
 

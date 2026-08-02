@@ -1,5 +1,9 @@
 import { parseAnswerSegments } from "./lib/answer-segments.ts";
-import { appendInlineMarkdown, renderAnswerMarkdown } from "./answer-markdown.js";
+import {
+  normalizeAnswerText,
+  renderAnswerMarkdown,
+  renderFormattedLines,
+} from "./answer-markdown.js";
 
 /**
  * @param {import("./lib/answer-segments.ts").AnswerSegment[]} segments
@@ -38,14 +42,40 @@ export function renderAnswer(el, text, annotations = []) {
  * @param {import("./lib/answer-segments.ts").AnswerSegment[]} segments
  */
 export function renderAnswerElement(segments) {
-  const paragraph = document.createElement("p");
-  paragraph.className = "chat-answer__segments";
+  const container = document.createElement("div");
+  container.className = "chat-answer__segments";
+
+  let paragraph = null;
+  let pendingLines = [];
+
+  const flushPendingText = () => {
+    if (!pendingLines.length) return;
+    renderFormattedLines(pendingLines, (node) => {
+      container.appendChild(node);
+    });
+    pendingLines = [];
+  };
 
   for (const segment of segments) {
+    if (segment.type === "text") {
+      const normalized = normalizeAnswerText(segment.content);
+      if (normalized) {
+        pendingLines.push(...normalized.split("\n"));
+      }
+      continue;
+    }
+
+    flushPendingText();
+    if (!paragraph) {
+      paragraph = document.createElement("p");
+      container.appendChild(paragraph);
+    }
     paragraph.appendChild(renderSegment(segment));
+    paragraph = null;
   }
 
-  return paragraph;
+  flushPendingText();
+  return container;
 }
 
 /**

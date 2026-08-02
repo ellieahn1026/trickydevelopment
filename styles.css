@@ -40,12 +40,13 @@
   --archive-gutter: 5.1rem;
   --archive-left: calc(var(--sideline-left) + var(--archive-gutter));
   --archive-gutter-right: var(--archive-gutter);
-  /* Q/A max width = half of (sideline → viewport right) */
-  --chat-bubble-max-w: calc((100vw - var(--sideline-left)) / 2);
+  /* Q/A max width = sideline → viewport right, minus gutters */
+  --chat-bubble-max-w: 100%;
   --content-left: var(--archive-left);
   /* Figma 대화중: input w:1000, bottom ≈59, centered in sideline→right */
   --composer-w: 1000px;
   --composer-bottom: 59px;
+  --composer-z: 100;
   --composer-dock-h: calc(
     31px + 12px + var(--send-h) + var(--composer-field-pad-y) * 2
   );
@@ -72,7 +73,7 @@ body[data-character="Potter"] {
   /* Equal sideline↔content and content↔right margins (zone ÷ 30 ≈ 3.3% each) */
   --chat-lane-inset: calc(var(--chat-zone-width) / 30);
   --chat-lane-width: calc(var(--chat-zone-width) - var(--chat-lane-inset) * 2);
-  --chat-bubble-max-w: min(calc(var(--chat-lane-width) / 2), 65ch);
+  --chat-bubble-max-w: 100%;
   --chat-text-size: 16px;
   --chat-line-height: 22px;
 }
@@ -106,7 +107,8 @@ body[data-character="Potter"] .chat-answer {
   line-height: var(--chat-line-height);
 }
 
-body[data-character="Potter"] .chat-answer.is-generating.chat-answer--loading {
+body[data-character="Potter"] .chat-answer.is-generating.chat-answer--loading,
+body[data-character="Rupin"] .chat-answer.is-generating.chat-answer--loading {
   width: auto;
   align-self: flex-start;
 }
@@ -176,10 +178,28 @@ body[data-character="F1"] .f1-hourglass__rotor--flip {
 body[data-character="F1"] .chat-panel__composer.f1-composer--animating,
 body.chat-started[data-character="F1"] .chat-panel__composer.f1-composer--animating {
   position: fixed !important;
-  z-index: 12 !important;
+  z-index: var(--composer-z) !important;
   pointer-events: none !important;
   will-change: left, top;
   clip-path: inset(0 0 0 var(--f1-clip-left, 0px));
+}
+
+body[data-character="F1"] .chat-panel__composer.f1-composer--urgency .prompt__field {
+  animation: f1-input-tilt 0.45s ease-in-out infinite;
+  transform-origin: 50% 50%;
+}
+
+@keyframes f1-input-tilt {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-4deg);
+  }
+  75% {
+    transform: rotate(4deg);
+  }
 }
 
 body[data-character="Pepper"] {
@@ -1070,7 +1090,7 @@ a.character--f1 {
   pointer-events: none;
 }
 
-/* Question — right edge; max = half(sideline → viewport right) */
+/* Question — right edge; max = content lane (excluding gutters) */
 .chat-question {
   align-self: flex-end;
   flex-shrink: 0;
@@ -1124,6 +1144,7 @@ a.character--f1 {
 .chat-answer--formatted {
   min-width: min(280px, 100%);
   white-space: normal;
+  line-height: 1.65;
 }
 
 .chat-answer--formatted > :first-child {
@@ -1135,27 +1156,53 @@ a.character--f1 {
 }
 
 .chat-answer--formatted p {
-  margin: 0 0 0.85em;
-  white-space: pre-wrap;
+  margin: 0 0 1em;
+  white-space: normal;
+}
+
+.chat-answer--formatted .chat-answer__section-label {
+  margin: 1.35em 0 0.5em;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.chat-answer--formatted .chat-answer__section-label:first-child {
+  margin-top: 0;
+}
+
+.chat-answer--formatted .chat-answer__section-label + p,
+.chat-answer--formatted .chat-answer__section-label + ul,
+.chat-answer--formatted .chat-answer__section-label + ol {
+  margin-top: 0;
 }
 
 .chat-answer--formatted h3,
 .chat-answer--formatted h4,
 .chat-answer--formatted h5 {
-  margin: 1.15em 0 0.45em;
+  margin: 1.25em 0 0.55em;
   font: inherit;
   font-weight: 700;
+  line-height: 1.45;
 }
 
 .chat-answer--formatted ul,
 .chat-answer--formatted ol {
-  margin: 0.25em 0 0.9em;
-  padding-left: 1.45em;
+  margin: 0.35em 0 1.1em;
+  padding-left: 1.65em;
 }
 
 .chat-answer--formatted li {
-  margin: 0.3em 0;
-  padding-left: 0.15em;
+  margin: 0.5em 0;
+  padding-left: 0.3em;
+  line-height: 1.65;
+}
+
+.chat-answer--formatted li::marker {
+  font-weight: 600;
+}
+
+.chat-answer--formatted ol li {
+  padding-left: 0.4em;
 }
 
 .chat-answer--formatted hr {
@@ -1195,8 +1242,24 @@ a.character--f1 {
 }
 
 .chat-answer--segmented .chat-answer__segments {
+  display: flex;
+  flex-direction: column;
   margin: 0;
   overflow: visible;
+}
+
+.chat-answer--segmented .chat-answer__segments > p {
+  margin: 0 0 1em;
+}
+
+.chat-answer--segmented .chat-answer__segments .chat-answer__section-label {
+  margin: 1.35em 0 0.5em;
+  font-weight: 700;
+}
+
+.chat-answer--segmented .chat-answer__segments > ul,
+.chat-answer--segmented .chat-answer__segments > ol {
+  margin: 0.35em 0 1.1em;
 }
 
 .answer-text-segment {
@@ -1577,38 +1640,69 @@ body.chat-started[data-character="Pepper"] .prompt__headline {
 }
 
 .chat-phrase-cover {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  vertical-align: text-bottom;
+  display: inline-block;
+  vertical-align: baseline;
   box-sizing: border-box;
-  margin: 0 0.12em;
-  padding: 0 8px;
+  margin: 0;
+  padding: 0;
   background: #000000;
   border-radius: 1px;
+  opacity: 0;
+  transform: translateY(-2px);
+  overflow: hidden;
+  line-height: 1;
+}
+
+.chat-phrase-cover.is-revealed {
+  animation: rupin-cover-reveal 0.28s ease forwards;
 }
 
 .chat-ignore-cover {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  vertical-align: text-bottom;
+  position: relative;
+  display: inline-block;
+  vertical-align: baseline;
   box-sizing: border-box;
-  margin: 0 0.12em;
-  padding: 0 10px;
+  margin: 0;
+  padding: 0;
   background: #000000;
   border-radius: 1px;
+  opacity: 0;
+  transform: translateY(-2px);
+  overflow: hidden;
+  line-height: inherit;
+  font: inherit;
+}
+
+.chat-ignore-cover.is-revealed {
+  animation: rupin-cover-reveal 0.28s ease forwards;
+}
+
+@keyframes rupin-cover-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .chat-ignore-cover__label {
-  font-family: var(--font-mono);
-  font-size: 0.82em;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  font: inherit;
   font-style: italic;
   font-weight: 500;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-  color: var(--bg);
+  letter-spacing: inherit;
+  line-height: 1;
+  color: #ffffff;
   white-space: nowrap;
+  transform: translate(-50%, -50%);
+  transform-origin: center center;
+  pointer-events: none;
 }
 
 .chat-answer--fully-ignored {
@@ -1617,6 +1711,7 @@ body.chat-started[data-character="Pepper"] .prompt__headline {
   padding: 0;
   background: #000000;
   border-radius: 2px;
+  animation: rupin-cover-reveal 0.32s ease forwards;
 }
 
 .chat-answer__ignore-panel {
@@ -1634,7 +1729,7 @@ body.chat-started[data-character="Pepper"] .prompt__headline {
   font-weight: 500;
   letter-spacing: -0.02em;
   line-height: 1.3;
-  color: var(--bg);
+  color: #ffffff;
   text-align: center;
 }
 
@@ -1710,7 +1805,7 @@ body.chat-started[data-character="Pepper"] .prompt__headline {
 .letter-fall-layer {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 3;
   pointer-events: none;
   overflow: visible;
 }
@@ -1720,15 +1815,15 @@ body.chat-started[data-character="Pepper"] .prompt__headline {
   left: var(--archive-left);
   right: var(--archive-gutter-right);
   bottom: 0;
-  height: 120px;
-  z-index: 2;
+  height: 148px;
+  z-index: 3;
   pointer-events: none;
   overflow: hidden;
 }
 
 .letter-pile__piece {
   position: fixed;
-  z-index: 2;
+  z-index: 1;
   color: #ffffff;
   white-space: nowrap;
   pointer-events: none;
@@ -1832,6 +1927,7 @@ body.chat-started[data-character="Pepper"] .prompt__headline {
   width: min(1000px, 100%);
   margin: 0 auto;
   pointer-events: auto;
+  z-index: var(--composer-z);
 }
 
 /* Rupin/Pepper first screen: centered in the sideline → viewport lane */
@@ -1855,7 +1951,7 @@ body[data-character="F1"] .chat-panel__composer {
   top: 50%;
   /* midpoint between fixed sideline x:365 and viewport right */
   left: calc(50vw + 182.5px);
-  z-index: 4;
+  z-index: var(--composer-z);
   width: min(
     1000px,
     calc(
@@ -1913,7 +2009,7 @@ body.chat-started[data-character="F1"] .chat-panel__composer--runaway.is-locked 
   bottom: var(--composer-bottom);
   left: calc(50vw + 182.5px) !important;
   right: auto !important;
-  z-index: 10;
+  z-index: var(--composer-z);
   width: min(
     var(--composer-w),
     calc(
@@ -1947,7 +2043,7 @@ body[data-character="Potter"] .chat-panel {
   top: var(--catch-y) !important;
   right: auto !important;
   bottom: auto !important;
-  z-index: 10;
+  z-index: var(--composer-z);
   margin: 0 !important;
   transform: none !important;
   overflow: visible;
@@ -2001,7 +2097,7 @@ body.chat-started .chat-panel__composer--runaway button {
 
 .chat-panel__composer--runaway {
   position: fixed;
-  z-index: 4;
+  z-index: var(--composer-z);
   margin: 0;
   left: 0;
   top: 0;
@@ -2035,9 +2131,29 @@ body.chat-started .chat-panel__composer--runaway button {
   display: none;
 }
 
+/* Composer above thread, fall pile, sideline, and character chrome. */
+.chat-panel__composer,
+.chat-panel__composer--runaway,
+.chat-panel__composer--runaway.is-locked,
+.chat-panel__composer--runaway.is-catch-locked,
+body.chat-started[data-character="Rupin"] .chat-panel__composer,
+body.chat-started[data-character="Rupin"] .chat-panel__composer--runaway,
+body.chat-started[data-character="Pepper"] .chat-panel__composer,
+body.chat-started[data-character="Pepper"] .chat-panel__composer--runaway,
+body.chat-started[data-character="F1"] .chat-panel__composer,
+body.chat-started[data-character="F1"] .chat-panel__composer--runaway,
+body[data-character="Rupin"] .chat-panel__composer,
+body[data-character="Pepper"] .chat-panel__composer,
+body[data-character="F1"] .chat-panel__composer,
+body[data-character="Potter"] .chat-panel__composer,
+body[data-character="F1"] .chat-panel__composer.f1-composer--animating,
+body.chat-started[data-character="F1"] .chat-panel__composer.f1-composer--animating {
+  z-index: var(--composer-z) !important;
+}
+
 .chat-panel__composer--runaway.is-locked {
   position: fixed !important;
-  z-index: 10;
+  z-index: var(--composer-z);
   pointer-events: auto;
   transition: none;
   will-change: auto;

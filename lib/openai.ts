@@ -6,12 +6,12 @@ import {
 import {
   type CharacterName,
   CHARACTER_SYSTEM_PROMPTS,
-  RUPIN_FALSE_CLAIM_INSTRUCTIONS,
+  getRupinExtraInstructions,
+  usesAnnotationResponseFormat,
   getChatPromptId,
   getChatPromptVersion,
   getPromptId,
   getPromptVersion,
-  usesAnnotationResponseFormat,
 } from "./characters";
 import type { AgentAction, AgentState } from "./agent-state";
 import { formatStateDescription } from "./agent-state";
@@ -270,13 +270,15 @@ function buildChatPromptVariables(input: {
 function buildPotterChatRequestBody(input: {
   message: string;
   conversation: string;
+  responsesInput: Array<{ role: "user" | "assistant"; content: string }>;
   behavior: AgentAction;
   state: AgentState;
   usePrompt: boolean;
   stream?: boolean;
 }) {
   const body: Record<string, unknown> = {
-    input: input.message,
+    input:
+      input.responsesInput.length > 0 ? input.responsesInput : input.message,
     max_output_tokens: MAX_OUTPUT_TOKENS,
     text: {
       format: CHAT_RESPONSE_FORMAT,
@@ -303,6 +305,7 @@ function buildPotterChatRequestBody(input: {
     body.model = getModel();
     body.instructions = [
       CHARACTER_SYSTEM_PROMPTS.Potter,
+      "The input is a multi-turn conversation. Continue naturally from prior USER and AGENT turns; reference earlier context when relevant. Do not answer as if only the latest message exists.",
       "Use the following prompt context when answering.",
       JSON.stringify(buildChatPromptVariables(input), null, 2),
       behaviorHint,
@@ -318,6 +321,7 @@ async function potterChatStreamRequest(
   input: {
     message: string;
     conversation: string;
+    responsesInput: Array<{ role: "user" | "assistant"; content: string }>;
     behavior: AgentAction;
     state: AgentState;
   },
@@ -340,6 +344,7 @@ async function potterChatStreamRequest(
 export async function generatePotterChatReplyStream(input: {
   message: string;
   conversation: string;
+  responsesInput: Array<{ role: "user" | "assistant"; content: string }>;
   behavior: AgentAction;
   state: AgentState;
 }): Promise<Response> {
@@ -365,6 +370,7 @@ export async function generatePotterChatReplyStream(input: {
 export async function generatePotterChatReply(input: {
   message: string;
   conversation: string;
+  responsesInput: Array<{ role: "user" | "assistant"; content: string }>;
   behavior: AgentAction;
   state: AgentState;
 }): Promise<{ text: string; mood: string; responseId: string }> {
@@ -446,7 +452,7 @@ function buildRequestBody(
     max_output_tokens: MAX_OUTPUT_TOKENS,
   };
 
-  if (!usePrompt) {
+  if (!usePrompt || usesAnnotationResponseFormat(character)) {
     body.text = {
       format: getChatResponseFormat(character),
     };
@@ -462,7 +468,7 @@ function buildRequestBody(
     body.prompt = prompt;
     const instructionParts: string[] = [];
     if (character === "Rupin") {
-      instructionParts.push(RUPIN_FALSE_CLAIM_INSTRUCTIONS);
+      instructionParts.push(getRupinExtraInstructions());
     }
     if (extraInstructions?.trim()) {
       if (character === "Pepper") {

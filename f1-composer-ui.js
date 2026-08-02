@@ -6,6 +6,7 @@ import {
 } from "./f1-hourglass.js";
 
 const INPUT_WINDOWS_MS = [10_000, 3_000, 5_000, 7_000];
+const URGENCY_LEAD_MS = 3_000;
 const FLEE_SPEED = 46;
 const RETURN_MS = 700;
 
@@ -16,6 +17,7 @@ let composer = null;
 let input = null;
 
 let windowTimer = 0;
+let urgencyTimer = 0;
 let animRaf = 0;
 
 /** @type {"idle" | "fleeing" | "returning" | "waiting"} */
@@ -71,9 +73,29 @@ function randomWindowMs() {
   return INPUT_WINDOWS_MS[index];
 }
 
+function startUrgencyMotion() {
+  composer?.classList.add("f1-composer--urgency");
+}
+
+function stopUrgencyMotion() {
+  window.clearTimeout(urgencyTimer);
+  urgencyTimer = 0;
+  composer?.classList.remove("f1-composer--urgency");
+}
+
+function scheduleUrgency(ms) {
+  stopUrgencyMotion();
+  const delay = Math.max(0, ms - URGENCY_LEAD_MS);
+  urgencyTimer = window.setTimeout(() => {
+    urgencyTimer = 0;
+    startUrgencyMotion();
+  }, delay);
+}
+
 function stopInputWindow() {
   window.clearTimeout(windowTimer);
   windowTimer = 0;
+  stopUrgencyMotion();
   stopF1HourglassSand();
 }
 
@@ -92,6 +114,7 @@ async function startInputWindow() {
   logInteraction("f1.input_window.start", { ms, rotate });
   await startF1HourglassSand(ms, { rotate });
 
+  scheduleUrgency(ms);
   windowTimer = window.setTimeout(() => {
     void handleTimeout();
   }, ms);
@@ -112,6 +135,7 @@ async function handleTimeout() {
 
   logInteraction("f1.input_window.timeout", {});
   phase = "fleeing";
+  stopUrgencyMotion();
   stopF1HourglassSand();
   input.value = "";
   input.disabled = true;

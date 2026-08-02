@@ -1,3 +1,5 @@
+import { spanExistsInText } from "./text-span";
+
 export type AnnotationSource = "uncertainty" | "revision";
 
 export type AnnotationAction = "replace" | "redact" | "hide";
@@ -139,7 +141,7 @@ const ANNOTATION_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-export const MAX_ANNOTATIONS_PER_ANSWER = 3;
+export const MAX_ANNOTATIONS_PER_ANSWER = 5;
 
 export const ASSISTANT_RESULT_RESPONSE_FORMAT = {
   type: "json_schema",
@@ -157,7 +159,7 @@ export const ASSISTANT_RESULT_RESPONSE_FORMAT = {
         type: "array",
         maxItems: MAX_ANNOTATIONS_PER_ANSWER,
         description:
-          "UI interaction metadata only. No HTML/CSS/React. Use [] when no interaction is needed. Max 3 items. Prefer the smallest doubtful span.",
+          "UI interaction metadata only. No HTML/CSS/React. For Rupin, annotate each distinct problematic span separately (up to 5). Return at least 2 annotations when the answer has 3+ sentences and multiple problem types appear. Use [] only when none of those problems exist.",
         items: ANNOTATION_SCHEMA,
       },
     },
@@ -427,7 +429,7 @@ export function validateAnnotation(
     }
   }
 
-  if (annotation.source === "uncertainty" && !answer.includes(annotation.from)) {
+  if (annotation.source === "uncertainty" && !spanExistsInText(answer, annotation.from)) {
     return {
       ...base,
       valid: false,
@@ -437,7 +439,9 @@ export function validateAnnotation(
 
   if (annotation.source === "revision") {
     const priorTexts = options.priorAssistantTexts ?? [];
-    const foundInPrior = priorTexts.some((text) => text.includes(annotation.from));
+    const foundInPrior = priorTexts.some((text) =>
+      spanExistsInText(text, annotation.from),
+    );
     if (!foundInPrior) {
       return {
         ...base,

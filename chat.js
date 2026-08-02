@@ -33,8 +33,14 @@ import {
 import { fetchLocalApi } from "./lib/resolve-local-api.ts";
 import {
   findSpanInText,
+  mergeRupinSelfRevisionPlans,
   resolveRupinPushbackPlan,
+  resolveRupinSelfRevisionPlans,
 } from "./lib/rupin-pushback.ts";
+import {
+  resolveRupinPushbackFallbackPlan,
+  resolveRupinSelfFallbackPlans,
+} from "./lib/rupin-fallback.ts";
 import potterLoadingIcon from "./assets/icons/potter-loading.svg";
 
 const character = document.body.dataset.character || "Potter";
@@ -63,7 +69,7 @@ const CENSOR_HOLD_MS = 1600;
 const REVISE_TYPE_MS = 22;
 const ERASE_HOLD_MS = 400;
 const ERASE_CHAR_MS = 28;
-const IGNORE_LABEL = "Just Ignore";
+const IGNORE_LABEL = "Just Ignore.";
 
 /** @type {import("./lib/assistant-result.ts").ValidatedAssistantPayload["validation"]} */
 const EMPTY_ASSISTANT_VALIDATION = {
@@ -329,7 +335,7 @@ function mountAnswerLoadingIndicator(el) {
   el.replaceChildren();
   el.classList.add("chat-answer--loading");
 
-  if (character === "Potter") {
+  if (character === "Potter" || character === "Rupin") {
     el.appendChild(createAnswerLoadingIcon());
     return;
   }
@@ -433,38 +439,67 @@ function sizeCensorToPhrase(censor, phrase, hostEl) {
   censor.style.minWidth = `${Math.round(phraseWidth)}px`;
 }
 
-function sizeInlineCoverToPhrase(cover, phrase, hostEl) {
+function measurePhraseBox(hostEl, phrase, insertBefore) {
   const probe = document.createElement("span");
-  probe.style.cssText =
-    "position:absolute;visibility:hidden;white-space:pre;font:inherit;letter-spacing:inherit";
+  probe.className = "chat-phrase-measure";
+  probe.setAttribute("aria-hidden", "true");
   probe.textContent = phrase;
-  hostEl.appendChild(probe);
-  const phraseWidth = Math.max(48, probe.getBoundingClientRect().width + 20);
-  const phraseHeight = Math.max(18, probe.getBoundingClientRect().height + 4);
+  hostEl.insertBefore(probe, insertBefore);
+
+  const rect = probe.getBoundingClientRect();
   probe.remove();
-  cover.style.minWidth = `${Math.round(phraseWidth)}px`;
-  cover.style.minHeight = `${Math.round(phraseHeight)}px`;
+
+  return {
+    width: Math.max(1, rect.width),
+    height: Math.max(1, rect.height),
+  };
 }
 
-function createPhraseCover(phrase, hostEl) {
-  const cover = document.createElement("span");
-  cover.className = "chat-phrase-cover";
-  cover.setAttribute("aria-label", "redacted");
-  sizeInlineCoverToPhrase(cover, phrase, hostEl);
-  return cover;
+function applyPhraseCoverSize(cover, box) {
+  cover.style.width = `${Math.round(box.width)}px`;
+  cover.style.height = `${Math.round(box.height)}px`;
 }
 
-function createIgnoreCover(phrase, hostEl) {
+function fitIgnoreLabelToCover(cover) {
+  const label = cover.querySelector(".chat-ignore-cover__label");
+  if (!label) return;
+
+  label.style.transform = "translate(-50%, -50%)";
+
+  requestAnimationFrame(() => {
+    if (!cover.isConnected || !label.isConnected) return;
+
+    const coverWidth = cover.clientWidth;
+    const coverHeight = cover.clientHeight;
+    const labelWidth = label.scrollWidth;
+    const labelHeight = label.scrollHeight;
+    if (coverWidth <= 0 || coverHeight <= 0 || labelWidth <= 0 || labelHeight <= 0) {
+      return;
+    }
+
+    const scale = Math.min(1, coverWidth / labelWidth, coverHeight / labelHeight);
+    label.style.transform =
+      scale < 1
+        ? `translate(-50%, -50%) scale(${scale})`
+        : "translate(-50%, -50%)";
+  });
+}
+
+function createIgnoreCover(phrase, hostEl, insertBefore) {
   const cover = document.createElement("span");
   cover.className = "chat-ignore-cover";
   cover.setAttribute("aria-label", IGNORE_LABEL);
+  applyPhraseCoverSize(
+    cover,
+    measurePhraseBox(hostEl, phrase, insertBefore),
+  );
 
   const label = document.createElement("span");
   label.className = "chat-ignore-cover__label";
+  label.setAttribute("aria-hidden", "true");
   label.textContent = IGNORE_LABEL;
   cover.appendChild(label);
 
-  sizeInlineCoverToPhrase(cover, phrase, hostEl);
   return cover;
 }
 
@@ -598,33 +633,89 @@ async function censorAndReviseAnswer(prev, span, token = generationToken) {
   scrollThreadToLatest();
 }
 
-function rupinRedactPhrase(prev, span) {
+async function rupinCoverPhraseAfterFall(
+  prev,
+  span,
+  createCover,
+  token,
+  buildStoredText,
+) {
   const { before, after, afterNode } = splitAnswerAround(
     prev.el,
     prev.text,
     span,
   );
-  const cover = createPhraseCover(span.phrase, prev.el);
+
+  const phraseWrap = document.createElement("span");
+  phraseWrap.className = "chat-answer__phrase chat-scrape-text";
+  prepareAnswerTextForScrape(phraseWrap, span.phrase);
+  prev.el.insertBefore(phraseWrap, afterNode);
+
+  scrollThreadToLatest();
+
+  await scrapeFallPhrase(phraseWrap, token, {
+    wait,
+    isAborted: isCancelled,
+    onFrame: scrollThreadToLatest,
+  });
+
+  if (isCancelled(token)) throw new DOMException("Aborted", "AbortError");
+
+  phraseWrap.remove();
+  prev.el.classList.remove("is-scrape-erasing");
+
+  const cover = createCover(span.phrase, prev.el, afterNode);
+  cover.classList.add("is-revealed");
   prev.el.insertBefore(cover, afterNode);
-  prev.text = `${before}${after}`;
+  fitIgnoreLabelToCover(cover);
+  prev.text = buildStoredText(before, after);
   prev.revised = true;
   scrollThreadToLatest();
 }
 
-function rupinIgnorePhrase(prev, span) {
-  const { before, after, afterNode } = splitAnswerAround(
-    prev.el,
-    prev.text,
+async function rupinRedactPhrase(prev, span, token = generationToken) {
+  await rupinCoverPhraseAfterFall(
+    prev,
     span,
+    createIgnoreCover,
+    token,
+    (before, after) => `${before}${after}`,
   );
-  const cover = createIgnoreCover(span.phrase, prev.el);
-  prev.el.insertBefore(cover, afterNode);
-  prev.text = `${before}${IGNORE_LABEL}${after}`;
-  prev.revised = true;
-  scrollThreadToLatest();
 }
 
-function rupinIgnoreFullAnswer(prev) {
+async function rupinIgnorePhrase(prev, span, token = generationToken) {
+  await rupinCoverPhraseAfterFall(
+    prev,
+    span,
+    createIgnoreCover,
+    token,
+    (before, after) => `${before}${after}`,
+  );
+}
+
+async function rupinIgnoreFullAnswer(prev, token = generationToken) {
+  const text = prev.text.trim();
+
+  if (text) {
+    const phraseWrap = document.createElement("span");
+    phraseWrap.className = "chat-answer__phrase chat-scrape-text";
+    prepareAnswerTextForScrape(phraseWrap, text);
+    prev.el.replaceChildren(phraseWrap);
+    prev.el.classList.add("is-scrape-erasing");
+    scrollThreadToLatest();
+
+    await scrapeFallPhrase(phraseWrap, token, {
+      wait,
+      isAborted: isCancelled,
+      onFrame: scrollThreadToLatest,
+    });
+
+    if (isCancelled(token)) throw new DOMException("Aborted", "AbortError");
+
+    phraseWrap.remove();
+    prev.el.classList.remove("is-scrape-erasing");
+  }
+
   prev.el.classList.add("chat-answer--fully-ignored");
   prev.el.replaceChildren();
 
@@ -677,40 +768,99 @@ async function rupinReplacePhrase(prev, span, replacement, token = generationTok
   scrollThreadToLatest();
 }
 
+function spanForPlan(entry, plan) {
+  return (
+    findSpanInText(entry.text, plan.matchedPhrase) ??
+    findSpanInText(entry.text, plan.from)
+  );
+}
+
+async function rupinApplyPlan(entry, plan, token = generationToken) {
+  if (plan.mode === "ignore-full") {
+    await rupinIgnoreFullAnswer(entry, token);
+    return;
+  }
+
+  const span = spanForPlan(entry, plan);
+  if (!span) return;
+
+  switch (plan.mode) {
+    case "redact":
+      await rupinRedactPhrase(entry, span, token);
+      break;
+    case "ignore-span":
+      await rupinIgnorePhrase(entry, span, token);
+      break;
+    case "replace":
+      if (plan.replacement?.trim()) {
+        await rupinReplacePhrase(entry, span, plan.replacement, token);
+      } else {
+        await rupinRedactPhrase(entry, span, token);
+      }
+      break;
+  }
+}
+
+async function rupinApplySelfRevisions(
+  entry,
+  annotations,
+  userMessage = "",
+  token = generationToken,
+) {
+  const annotationPlans = resolveRupinSelfRevisionPlans(annotations, entry.text);
+  const fallbackPlans = resolveRupinSelfFallbackPlans(entry.text, { userMessage });
+  const plans = mergeRupinSelfRevisionPlans(
+    annotationPlans,
+    fallbackPlans,
+    entry.text,
+  );
+
+  if (fallbackPlans.length > 0 && plans.length > annotationPlans.length) {
+    logInteraction("rupin.fallback.self", {
+      planCount: plans.length - annotationPlans.length,
+      totalPlans: plans.length,
+      annotationPlans: annotationPlans.length,
+    });
+  }
+  if (plans.length === 0) return;
+
+  entry.el.classList.add("is-doubting");
+  scrollThreadToLatest();
+
+  try {
+    for (const plan of plans) {
+      await rupinApplyPlan(entry, plan, token);
+      if (isCancelled(token)) throw new DOMException("Aborted", "AbortError");
+    }
+    entry.revised = true;
+  } finally {
+    entry.el.classList.remove("is-doubting");
+  }
+}
+
 /**
  * Rupin pushback: apply revision annotations to the prior answer.
  */
-async function rupinHandlePushback(prev, annotations, token = generationToken) {
-  const plan = resolveRupinPushbackPlan(annotations, prev.text);
+async function rupinHandlePushback(
+  prev,
+  annotations,
+  userMessage = "",
+  token = generationToken,
+) {
+  let plan = resolveRupinPushbackPlan(annotations, prev.text);
+  if (!plan && userMessage.trim()) {
+    plan = resolveRupinPushbackFallbackPlan(prev.text, userMessage);
+    if (plan) {
+      logInteraction("rupin.fallback.pushback", { mode: plan.mode });
+    }
+  }
   if (!plan) return;
 
   prev.el.classList.add("is-doubting");
   scrollThreadToLatest();
 
   try {
-    switch (plan.mode) {
-      case "redact": {
-        const span = findSpanInText(prev.text, plan.from);
-        if (!span) return;
-        rupinRedactPhrase(prev, span);
-        break;
-      }
-      case "ignore-full":
-        rupinIgnoreFullAnswer(prev);
-        break;
-      case "ignore-span": {
-        const span = findSpanInText(prev.text, plan.from);
-        if (!span) return;
-        rupinIgnorePhrase(prev, span);
-        break;
-      }
-      case "replace": {
-        const span = findSpanInText(prev.text, plan.from);
-        if (!span || !plan.replacement) return;
-        await rupinReplacePhrase(prev, span, plan.replacement, token);
-        break;
-      }
-    }
+    await rupinApplyPlan(prev, plan, token);
   } finally {
     prev.el.classList.remove("is-doubting");
   }
@@ -1283,7 +1433,15 @@ async function appendStreamingAnswer(
     const answerMood = answer.mood;
     el.dataset.answerMood = answerMood;
     const annotations = answer.assistantResult?.annotations ?? [];
-    renderAnswer(el, answer.text, annotations);
+
+    if (character === "Rupin") {
+      renderAnswer(el, answer.text, []);
+      const currentEntry = { el, text: answer.text, revised: false };
+      await rupinApplySelfRevisions(currentEntry, annotations, message, token);
+      answer.text = currentEntry.text;
+    } else {
+      renderAnswer(el, answer.text, annotations);
+    }
 
     logInteraction("answer.received", {
       mood: answerMood,
@@ -1292,6 +1450,9 @@ async function appendStreamingAnswer(
       hasUncertainty: Boolean(answer.assistantResult?.uncertainty),
       hasRevision: Boolean(answer.assistantResult?.revision),
       annotationCount: answer.assistantResult?.annotations?.length ?? 0,
+      droppedAnnotationCount:
+        answer.validation?.annotations?.filter((item) => !item.valid).length ??
+        0,
       textLength: answer.text?.length ?? 0,
       isPushback,
     });
@@ -1302,6 +1463,7 @@ async function appendStreamingAnswer(
         await rupinHandlePushback(
           prev,
           answer.assistantResult?.annotations ?? [],
+          message,
           token,
         );
       }
