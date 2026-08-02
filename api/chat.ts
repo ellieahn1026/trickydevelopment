@@ -3,7 +3,7 @@ import {
   handlePotterChatStream,
   type ConversationHistoryEntry,
 } from "../lib/conversation";
-import { generateChatReplyStream } from "../lib/openai";
+import { formatOpenAIError, generateChatReplyStream } from "../lib/openai";
 import { handleF1ChatStream, resolveAgentState } from "../src/index.ts";
 
 export default async function handler(req: any, res: any) {
@@ -93,8 +93,7 @@ export default async function handler(req: any, res: any) {
 
     return res.end();
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Chat request failed.";
+    const message = formatOpenAIError(error);
     console.error("[api/chat]", message);
 
     if (res.headersSent) {

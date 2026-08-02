@@ -185,6 +185,336 @@ body.chat-started[data-character="F1"] .chat-panel__composer.f1-composer--animat
 body[data-character="Pepper"] {
   --character-color: #4cff4f;
   --headline-accent: #4cff4f;
+  /* Arimo first so orbit-kr.css unicode-range (Orbit) applies to Korean glyphs. */
+  --font-ui: "Arimo", "Xanh Mono", sans-serif;
+  --font-composer-input: "Arimo", "Xanh Mono", sans-serif;
+  /* Vertical center of the left Potter icon swatch */
+  --pepper-message-anchor-y: calc(var(--chars-top) + var(--btn-size) / 2);
+  background: transparent;
+}
+
+body[data-character="Pepper"] .screen {
+  background: transparent;
+}
+
+body[data-character="Pepper"] #pepper-chat-root {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+body[data-character="Pepper"] .emotion-background {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition: none;
+}
+
+body[data-character="Pepper"] .emotion-background__content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+body[data-character="Pepper"] .emotion-background__content .chat-panel,
+body[data-character="Pepper"] .emotion-background__content .chat-panel__composer,
+body[data-character="Pepper"] .emotion-background__content input,
+body[data-character="Pepper"] .emotion-background__content button {
+  pointer-events: auto;
+}
+
+body[data-character="Pepper"] .emotion-background__content .chat-panel {
+  width: 100%;
+  height: 100%;
+  margin-left: 0;
+  margin-right: 0;
+  max-width: none;
+}
+
+body[data-character="Pepper"] .emotion-wave-host {
+  position: absolute;
+  left: var(--sideline-left);
+  right: 0;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+body[data-character="Pepper"] .emotion-wave {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+body[data-character="Pepper"] .emotion-pop-icons,
+body[data-character="Pepper"] .emotion-fall-icons,
+body[data-character="Pepper"] .emotion-bounce-icons {
+  position: absolute;
+  left: var(--sideline-left);
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+body[data-character="Pepper"] .emotion-pop-icons__item {
+  position: absolute;
+  bottom: 0;
+  transform: translate(-50%, 100%);
+  opacity: 0;
+  animation-name: pepper-happy-icon-pop;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes pepper-happy-icon-pop {
+  0% {
+    transform: translate(-50%, 80%) scale(0.55);
+    opacity: 0;
+  }
+
+  12% {
+    opacity: 1;
+  }
+
+  28% {
+    transform: translate(-50%, -18vh) scale(1.08);
+    opacity: 1;
+  }
+
+  42% {
+    transform: translate(-50%, -10vh) scale(0.96);
+  }
+
+  58% {
+    transform: translate(-50%, -24vh) scale(1.02);
+  }
+
+  100% {
+    transform: translate(-50%, -115vh) scale(0.88);
+    opacity: 0;
+  }
+}
+
+body[data-character="Pepper"] .emotion-fall-icons__item {
+  position: absolute;
+  top: 0;
+  transform: translate(-50%, -120%);
+  opacity: 0;
+  animation-name: pepper-groggy-icon-fall;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes pepper-groggy-icon-fall {
+  0% {
+    transform: translate(-50%, -120%) rotate(-6deg);
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 0.92;
+  }
+
+  55% {
+    transform: translate(calc(-50% + var(--groggy-fall-drift, 0px)), 52vh)
+      rotate(8deg);
+    opacity: 0.88;
+  }
+
+  100% {
+    transform: translate(calc(-50% + var(--groggy-fall-drift, 0px)), 118vh)
+      rotate(14deg);
+    opacity: 0;
+  }
+}
+
+body[data-character="Pepper"] .emotion-bounce-icons__item {
+  position: absolute;
+  bottom: 0;
+  transform: translate(-50%, 100%);
+  opacity: 0;
+  animation-name: pepper-groggy-angry-bounce;
+  animation-timing-function: var(
+    --angry-bounce-easing,
+    cubic-bezier(0.34, 1.4, 0.64, 1)
+  );
+  animation-fill-mode: forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes pepper-groggy-angry-bounce {
+  0% {
+    transform: translate(-50%, 90%) scale(0.5);
+    opacity: 0;
+  }
+
+  12% {
+    opacity: 1;
+  }
+
+  38% {
+    transform: translate(-50%, var(--angry-bounce-peak-y, -32vh))
+      scale(var(--angry-bounce-peak-scale, 1.1));
+    opacity: 1;
+  }
+
+  58% {
+    transform: translate(-50%, var(--angry-bounce-settle-y, -12vh))
+      scale(var(--angry-bounce-settle-scale, 0.94));
+  }
+
+  78% {
+    transform: translate(-50%, var(--angry-bounce-rebound-y, -22vh))
+      scale(var(--angry-bounce-rebound-scale, 1.02));
+    opacity: 0.85;
+  }
+
+  100% {
+    transform: translate(-50%, 105%) scale(0.8);
+    opacity: 0;
+  }
+}
+
+body[data-character="Pepper"].chat-started {
+  overflow: hidden;
+}
+
+body[data-character="Pepper"] .chat-panel__thread.pepper-thread-snap {
+  position: fixed;
+  top: 0;
+  left: var(--sideline-left);
+  right: 0;
+  bottom: 0;
+  width: auto;
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+  transform: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  align-items: stretch;
+  pointer-events: auto;
+}
+
+body[data-character="Pepper"] .chat-panel__thread.pepper-thread-snap::-webkit-scrollbar {
+  display: none;
+}
+
+body[data-character="Pepper"] .pepper-turn-snap {
+  position: relative;
+  flex-shrink: 0;
+  width: 100%;
+  min-height: 100dvh;
+  height: 100dvh;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+body[data-character="Pepper"] .pepper-turn-snap__question-anchor {
+  margin-top: var(--pepper-message-anchor-y);
+  transform: translateY(-50%);
+  width: min(
+    var(--composer-w),
+    calc(
+      100vw - var(--sideline-left) - var(--archive-gutter) -
+        var(--archive-gutter)
+    )
+  );
+  display: flex;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+body[data-character="Pepper"] .pepper-turn-snap__error {
+  position: fixed;
+  left: calc(50vw + 182.5px);
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  pointer-events: auto;
+}
+
+body[data-character="Pepper"].chat-started .chat-panel__thread.pepper-thread-snap,
+body[data-character="Pepper"] .chat-panel__thread.pepper-thread-snap {
+  top: 0;
+  height: 100dvh;
+  max-height: 100dvh;
+}
+
+body[data-character="Pepper"].chat-started .chat-panel__thread.pepper-thread-snap::before,
+body[data-character="Pepper"] .chat-panel__thread.pepper-thread-snap::before {
+  display: none;
+}
+
+body[data-character="Pepper"] .chat-question {
+  position: relative;
+  align-self: center;
+  width: fit-content;
+  max-width: min(var(--chat-bubble-max-w), 100%);
+  margin: 0 auto;
+  padding: 20px 16px;
+  background: #000000;
+  color: #ffffff;
+  text-align: center;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  pointer-events: auto;
+  animation: chat-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+body[data-character="Pepper"] .chat-answer {
+  padding: 0;
+  background: none;
+  color: #ffffff;
+  animation: chat-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+body[data-character="Pepper"] .chat-answer--wave-canvas {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  animation: none;
+}
+
+body[data-character="Pepper"] .chat-answer--loading {
+  color: #ffffff;
+  opacity: 0.85;
+}
+
+body[data-character="Pepper"] .chat-answer--error {
+  color: #ff6b6b;
+  background: none;
+  padding: 0;
 }
 
 *,
@@ -375,6 +705,27 @@ body {
   gap: var(--btn-gap);
   flex-shrink: 0;
   animation: slide-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+}
+
+@media (max-height: 799px) {
+  .characters {
+    --btn-size: calc(97px * 0.8);
+    --btn-gap: calc(15px * 0.8);
+    --btn-label: calc(20px * 0.8);
+  }
+
+  .characters .character {
+    gap: calc(8px * 0.8);
+  }
+
+  .characters .character__label,
+  .characters .character__badge {
+    line-height: calc(23.8px * 0.8);
+  }
+
+  .characters .character__badge {
+    font-size: calc(20px * 0.8);
+  }
 }
 
 .character {
@@ -1180,8 +1531,8 @@ a.character--f1 {
   }
 }
 
-body[data-character="Pepper"] .chat-answer {
-  animation: chat-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+body.chat-started[data-character="Pepper"] .prompt__headline {
+  display: none;
 }
 
 .chat-answer--error {
@@ -1225,6 +1576,68 @@ body[data-character="Pepper"] .chat-answer {
   cursor: default;
 }
 
+.chat-phrase-cover {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: text-bottom;
+  box-sizing: border-box;
+  margin: 0 0.12em;
+  padding: 0 8px;
+  background: #000000;
+  border-radius: 1px;
+}
+
+.chat-ignore-cover {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: text-bottom;
+  box-sizing: border-box;
+  margin: 0 0.12em;
+  padding: 0 10px;
+  background: #000000;
+  border-radius: 1px;
+}
+
+.chat-ignore-cover__label {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--bg);
+  white-space: nowrap;
+}
+
+.chat-answer--fully-ignored {
+  position: relative;
+  min-height: 3.2em;
+  padding: 0;
+  background: #000000;
+  border-radius: 2px;
+}
+
+.chat-answer__ignore-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.2em;
+  padding: 0.75em 1em;
+}
+
+.chat-answer__ignore-label {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  color: var(--bg);
+  text-align: center;
+}
+
 .chat-answer.is-doubting {
   opacity: 0.92;
 }
@@ -1266,61 +1679,6 @@ body[data-character="Pepper"] .chat-answer {
   }
 }
 
-/* Pepper happy: each word rises and falls as a wave */
-.chat-answer--happy-dance .chat-answer__word--dance {
-  display: inline-block;
-  transform-origin: 50% 85%;
-  will-change: transform;
-  animation: tom-answer-word-wave 1.05s ease-in-out infinite;
-  animation-delay: calc(var(--i) * -0.11s);
-}
-
-@keyframes tom-answer-word-wave {
-  0%,
-  100% {
-    transform: translateY(0) rotate(0deg);
-  }
-
-  50% {
-    transform: translateY(-9px) rotate(-2deg);
-  }
-}
-
-/* Pepper sad: the straight answer progressively droops into an arc */
-.chat-answer--sad-arc {
-  position: relative;
-  display: block;
-  overflow: visible;
-  max-width: min(var(--chat-bubble-max-w), 100%);
-  white-space: normal;
-}
-
-.chat-answer__sad-path {
-  position: relative;
-  display: block;
-  overflow: visible;
-}
-
-.chat-answer__sad-measure {
-  position: absolute;
-  visibility: hidden;
-  pointer-events: none;
-  white-space: pre;
-  font: inherit;
-  letter-spacing: inherit;
-}
-
-.chat-answer__char--sad {
-  position: absolute;
-  top: 0;
-  left: 0;
-  display: inline-block;
-  transform-origin: 0% 90%;
-  white-space: pre;
-  will-change: transform;
-  transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
 .chat-scrape-text {
   display: inline;
   white-space: pre-wrap;
@@ -1349,6 +1707,14 @@ body[data-character="Pepper"] .chat-answer {
   visibility: hidden;
 }
 
+.letter-fall-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  overflow: visible;
+}
+
 .letter-pile {
   position: fixed;
   left: var(--archive-left);
@@ -1366,7 +1732,11 @@ body[data-character="Pepper"] .chat-answer {
   color: #ffffff;
   white-space: nowrap;
   pointer-events: none;
-  will-change: transform, opacity;
+  will-change: left, top, transform, opacity;
+}
+
+.letter-pile__piece--falling {
+  z-index: 1;
 }
 
 .letter-pile__piece--chunk {
@@ -1439,6 +1809,17 @@ body[data-character="Pepper"] .chat-answer {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes pepper-question-exit {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -56px);
   }
 }
 
@@ -1599,7 +1980,6 @@ body.chat-started .prompt__send {
 }
 
 body.chat-started[data-character="Rupin"] .chat-panel__thread,
-body.chat-started[data-character="Pepper"] .chat-panel__thread,
 body.chat-started[data-character="F1"] .chat-panel__thread {
   padding-bottom: calc(
     var(--composer-bottom) + var(--composer-dock-h) + 32px
@@ -1770,112 +2150,6 @@ body.composer-locked .chat-panel__composer--runaway button {
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-/* —— Pepper mood states —— */
-body[data-character="Pepper"] .prompt__headline {
-  white-space: normal;
-  max-width: 100%;
-}
-
-body[data-character="Pepper"] .chat-panel__composer {
-  overflow: visible;
-}
-
-body[data-character="Pepper"] .prompt__field {
-  transform-origin: center center;
-  will-change: transform;
-}
-
-/* happy: dance-y left/right tick */
-body[data-pepper-mood="happy"] .prompt__field {
-  animation: tom-happy-dance 0.55s ease-in-out infinite;
-}
-
-@keyframes tom-happy-dance {
-  0%,
-  100% {
-    transform: rotate(0deg) translateX(0);
-  }
-  20% {
-    transform: rotate(-5deg) translateX(-8px);
-  }
-  40% {
-    transform: rotate(5deg) translateX(8px);
-  }
-  60% {
-    transform: rotate(-4deg) translateX(-6px);
-  }
-  80% {
-    transform: rotate(4deg) translateX(6px);
-  }
-}
-
-/* sad: tilt + float handled in pepper-sad-float.js */
-body[data-pepper-mood="sad"] .prompt__field--sad-float {
-  width: 100%;
-  transform-origin: center center;
-  will-change: transform;
-}
-
-/* tired: nodding-off dip — head drops, then snaps back */
-body[data-pepper-mood="tired"] .prompt__field {
-  transform-origin: center center;
-  animation: tom-tired-nod 3.5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
-}
-
-body[data-pepper-mood="tired"] .prompt__field.prompt__field--pet-bounce {
-  animation: none !important;
-}
-
-body[data-pepper-mood="tired"] #chat-input:disabled {
-  cursor: not-allowed;
-}
-
-body[data-pepper-mood="tired"] .prompt__send--pet {
-  background: #6eebcb !important;
-  background-color: #6eebcb !important;
-  color: #000000;
-  opacity: 1;
-}
-
-body[data-pepper-mood="tired"] .prompt__send--pet:hover {
-  background: #5de4c3 !important;
-  background-color: #5de4c3 !important;
-}
-
-@keyframes tom-tired-nod {
-  0%,
-  12% {
-    transform: translateY(0) rotate(0deg);
-  }
-  38% {
-    transform: translateY(42px) rotate(4deg);
-  }
-  52% {
-    transform: translateY(46px) rotate(5deg);
-  }
-  68% {
-    transform: translateY(0) rotate(0deg);
-  }
-  100% {
-    transform: translateY(0) rotate(0deg);
-  }
-}
-
-/* common: soft breathe */
-body[data-pepper-mood="common"] .prompt__field {
-  animation: tom-common-breathe 3.2s ease-in-out infinite;
-}
-
-@keyframes tom-common-breathe {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(4px);
   }
 }
 

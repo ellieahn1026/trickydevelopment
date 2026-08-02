@@ -1,4 +1,3 @@
-const COMPOSER_Z = 4;
 const SHAKE_MS = 130;
 const DETACH_JITTER_MS = 45;
 const SETTLE_MS = 220;
@@ -6,6 +5,7 @@ const BUCKET_COUNT = 56;
 
 const pileState = {
   el: null,
+  fallLayer: null,
   buckets: new Map(),
 };
 
@@ -18,6 +18,18 @@ function getOrCreatePile() {
   document.querySelector(".screen")?.appendChild(pile);
   pileState.el = pile;
   return pile;
+}
+
+function getOrCreateFallLayer() {
+  if (pileState.fallLayer?.isConnected) return pileState.fallLayer;
+
+  getOrCreatePile();
+  const layer = document.createElement("div");
+  layer.className = "letter-fall-layer";
+  layer.setAttribute("aria-hidden", "true");
+  document.querySelector(".screen")?.appendChild(layer);
+  pileState.fallLayer = layer;
+  return layer;
 }
 
 function indexWords(phrase) {
@@ -200,46 +212,58 @@ function resolveLanding(pileBounds, pieceWidth, pieceHeight, sourceRect) {
   return { landX, landY, slideX, slideY, stackLayer };
 }
 
-function gravityPourKeyframes(dropY, spin, slideX, slideY, swayX) {
-  const yAt = (t) => dropY * t * t;
-  const xAt = (t) => swayX * t * t;
-  const impactY = dropY;
-  const impactX = swayX;
+function gravityFallKeyframes(startX, startY, endX, endY, spin, skew, swayX) {
+  const offsets = [0, 0.14, 0.3, 0.5, 0.68, 0.84, 0.94, 1];
+  return offsets.map((t) => {
+    const easedY = t * t;
+    const driftX = swayX * t * (1 - t);
+    const x = startX + (endX - startX) * t + driftX;
+    const y = startY + (endY - startY) * easedY;
+    const settleBlend = Math.max(0, (t - 0.94) / 0.06);
+    const landX = x + (endX - x) * settleBlend;
+    const landY = y + (endY - y) * settleBlend;
 
-  return [
-    { transform: "translate(0px, 0px) rotate(0deg)", opacity: 1, offset: 0 },
-    {
-      transform: `translate(${xAt(0.22)}px, ${yAt(0.22)}px) rotate(${spin * 0.08}deg)`,
-      opacity: 1,
-      offset: 0.22,
-    },
-    {
-      transform: `translate(${xAt(0.48)}px, ${yAt(0.48)}px) rotate(${spin * 0.22}deg)`,
-      opacity: 1,
-      offset: 0.48,
-    },
-    {
-      transform: `translate(${xAt(0.74)}px, ${yAt(0.74)}px) rotate(${spin * 0.45}deg)`,
-      opacity: 1,
-      offset: 0.74,
-    },
-    {
-      transform: `translate(${impactX}px, ${impactY}px) rotate(${spin * 0.72}deg)`,
-      opacity: 1,
-      offset: 0.86,
-    },
-    {
-      transform: `translate(${impactX + slideX}px, ${impactY + slideY}px) rotate(${spin}deg)`,
-      opacity: 0.94,
-      offset: 1,
-    },
-  ];
+    return {
+      left: `${landX}px`,
+      top: `${landY}px`,
+      transform: `rotate(${spin * t}deg) skewX(${skew * t}deg)`,
+      opacity: t < 1 ? 1 : 0.94,
+      offset: t,
+    };
+  });
 }
 
-function spawnFallingPiece(unit, sourceRect, { delayMs = 0 } = {}) {
+function waitForNextFrame() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(resolve);
+    });
+  });
+}
+
+function commitPieceToPile(piece, pile, landX, landY, spin, skew) {
+  piece.getAnimations().forEach((active) => {
+    active.commitStyles?.();
+    active.cancel();
+  });
+
+  const settledBounds = getPileBounds(pile);
+
+  piece.classList.remove("letter-pile__piece--falling");
+  piece.style.position = "absolute";
+  piece.style.left = `${landX - settledBounds.left}px`;
+  piece.style.top = `${landY - settledBounds.top}px`;
+  piece.style.transform = `rotate(${spin}deg) skewX(${skew}deg)`;
+  piece.style.opacity = "0.92";
+  piece.style.zIndex = "";
+  pile.appendChild(piece);
+}
+
+async function spawnFallingPiece(unit, sourceRect, { delayMs = 0 } = {}) {
   const pile = getOrCreatePile();
+  const fallLayer = getOrCreateFallLayer();
   const piece = document.createElement("span");
-  piece.className = "letter-pile__piece";
+  piece.className = "letter-pile__piece letter-pile__piece--falling";
   if (unit.classList.contains("chat-scrape__unit--chunk")) {
     piece.classList.add("letter-pile__piece--chunk");
   }
@@ -252,9 +276,14 @@ function spawnFallingPiece(unit, sourceRect, { delayMs = 0 } = {}) {
   piece.style.letterSpacing = style.letterSpacing;
   piece.style.lineHeight = style.lineHeight;
   piece.style.color = style.color;
-  piece.style.zIndex = String(COMPOSER_Z - 2);
 
-  document.body.appendChild(piece);
+  const startX = sourceRect.left;
+  const startY = sourceRect.top;
+  piece.style.left = `${startX}px`;
+  piece.style.top = `${startY}px`;
+  piece.style.visibility = "hidden";
+
+  fallLayer.appendChild(piece);
 
   const pieceRect = piece.getBoundingClientRect();
   const pileBounds = getPileBounds(pile);
@@ -265,18 +294,20 @@ function spawnFallingPiece(unit, sourceRect, { delayMs = 0 } = {}) {
     sourceRect,
   );
 
-  const dropY = landY - sourceRect.top;
-  const swayX = (Math.random() - 0.5) * 8;
+  const endX = landX + slideX;
+  const endY = landY + slideY;
+  const dropY = endY - startY;
+  const swayX = (Math.random() - 0.5) * 18;
   const spin = (Math.random() - 0.5) * 40;
   const skew = (Math.random() - 0.5) * 6;
-  const fallMs = 360 + Math.sqrt(Math.max(dropY, 80)) * 22 + Math.random() * 90;
+  const fallMs = 520 + Math.sqrt(Math.max(dropY, 80)) * 28 + Math.random() * 120;
 
-  piece.style.left = `${sourceRect.left}px`;
-  piece.style.top = `${sourceRect.top}px`;
+  await waitForNextFrame();
+  piece.style.visibility = "visible";
 
   return new Promise((resolve) => {
     const animation = piece.animate(
-      gravityPourKeyframes(dropY, spin, slideX, slideY, swayX),
+      gravityFallKeyframes(startX, startY, endX, endY, spin, skew, swayX),
       {
         duration: fallMs,
         delay: delayMs,
@@ -286,19 +317,7 @@ function spawnFallingPiece(unit, sourceRect, { delayMs = 0 } = {}) {
     );
 
     animation.onfinish = () => {
-      piece.getAnimations().forEach((active) => active.cancel());
-
-      const settledBounds = getPileBounds(pile);
-      const finalX = landX + slideX;
-      const finalY = landY + slideY;
-
-      piece.style.position = "absolute";
-      piece.style.left = `${finalX - settledBounds.left}px`;
-      piece.style.top = `${finalY - settledBounds.top}px`;
-      piece.style.transform = `rotate(${spin}deg) skewX(${skew}deg)`;
-      piece.style.opacity = "0.92";
-      piece.style.zIndex = "";
-      pile.appendChild(piece);
+      commitPieceToPile(piece, pile, endX, endY, spin, skew);
       resolve();
     };
   });
@@ -316,7 +335,7 @@ function collectUnits(phraseEl) {
 async function scrapeFallPhrase(phraseEl, token, { wait, isAborted, onFrame }) {
   if (!phraseEl) return;
 
-  getOrCreatePile();
+  getOrCreateFallLayer();
   const host = phraseEl.closest(".chat-answer");
   host?.classList.add("is-scrape-erasing");
 

@@ -78,25 +78,129 @@ function getModel(): string {
   return process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
 }
 
+function usesSavedPrompts(): boolean {
+  const flag = process.env.OPENAI_USE_SAVED_PROMPTS?.trim().toLowerCase();
+  if (flag === "0" || flag === "false" || flag === "no") {
+    return false;
+  }
+  return true;
+}
+
 function shouldFallbackFromPrompt(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return (
     message.includes("invalid_prompt") ||
     message.includes("reasoning.mode") ||
     message.includes("unsupported_value") ||
-    message.includes("prompt")
+    message.includes("prompt") ||
+    message.includes("response_format") ||
+    message.includes("json_schema") ||
+    message.includes("invalid_json_schema")
   );
 }
 
+function shouldRetryWithoutPrompt(error: unknown): boolean {
+  if (shouldFallbackFromPrompt(error)) {
+    return true;
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  const statusMatch = /OpenAI API error \((\d+)\)/.exec(message);
+  const status = statusMatch ? Number(statusMatch[1]) : null;
+
+  if (status === 401 || status === 403 || status === 429) {
+    return false;
+  }
+
+  return status === 400 || status === 404 || status === 422;
+}
+
+export function formatOpenAIError(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return "Chat request failed.";
+  }
+
+  if (error.message.includes("OPENAI_API_KEY is not set")) {
+    return "OPENAI_API_KEY가 설정되지 않았습니다. .env 파일에 API 키를 추가한 뒤 서버를 재시작해 주세요.";
+  }
+
+  const statusMatch = /OpenAI API error \((\d+)\)/.exec(error.message);
+  const status = statusMatch ? Number(statusMatch[1]) : null;
+  const body = statusMatch
+    ? error.message.slice(statusMatch.index! + statusMatch[0].length).trim()
+    : error.message;
+
+  let detail = body;
+  try {
+    const parsed = JSON.parse(body) as {
+      error?: { message?: string; code?: string; type?: string };
+    };
+    detail =
+      parsed.error?.message ||
+      parsed.error?.code ||
+      parsed.error?.type ||
+      body;
+  } catch {
+    // Keep raw body when OpenAI did not return JSON.
+  }
+
+  if (status === 401) {
+    return "OpenAI API 키가 유효하지 않습니다. .env의 OPENAI_API_KEY를 확인해 주세요.";
+  }
+
+  if (status === 429) {
+    return "OpenAI 요청 한도에 도달했습니다. 잠시 후 다시 시도해 주세요.";
+  }
+
+  if (
+    detail.includes("insufficient_quota") ||
+    detail.toLowerCase().includes("quota")
+  ) {
+    return "OpenAI 사용량 한도가 부족합니다. 결제/크레딧 설정을 확인해 주세요.";
+  }
+
+  if (
+    detail.includes("sandbox network policy") ||
+    detail.includes("not on allow list")
+  ) {
+    return "OpenAI API 호출이 Cursor 샌드박스 네트워크 정책에 막혔습니다. Cursor 터미널이 아닌 macOS Terminal/iTerm에서 `bun run dev`를 실행하거나, Cursor에서 네트워크 권한이 허용된 터미널로 서버를 다시 시작해 주세요.";
+  }
+
+  if (status === 403) {
+    return `OpenAI API 접근이 거부되었습니다. ${detail.slice(0, 180)}`;
+  }
+
+  if (detail.includes("invalid_prompt") || detail.includes("prompt")) {
+    return "저장된 OpenAI Prompt 설정에 문제가 있습니다. OPENAI_USE_SAVED_PROMPTS=false 로 내장 프롬프트를 사용할 수 있습니다.";
+  }
+
+  return `OpenAI API error${status ? ` (${status})` : ""}: ${detail.slice(0, 220)}`;
+}
+
 async function openaiFetchResponse(path: string, init: RequestInit = {}) {
-  const response = await fetch(`${OPENAI_BASE}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${getApiKey()}`,
-      "Content-Type": "application/json",
-      ...(init.headers ?? {}),
-    },
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${OPENAI_BASE}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${getApiKey()}`,
+        "Content-Type": "application/json",
+        ...(init.headers ?? {}),
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (
+      message.includes("sandbox network policy") ||
+      message.includes("not on allow list")
+    ) {
+      throw new Error(
+        "OpenAI API error (403): Blocked by sandbox network policy\nDestination: api.openai.com:443\nReason: not on allow list",
+      );
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     const body = await response.text();
@@ -335,14 +439,18 @@ function buildRequestBody(
   previousResponseId: string | undefined,
   usePrompt: boolean,
   stream = false,
+  extraInstructions?: string,
 ) {
   const body: Record<string, unknown> = {
     input: message,
     max_output_tokens: MAX_OUTPUT_TOKENS,
-    text: {
-      format: getChatResponseFormat(character),
-    },
   };
+
+  if (!usePrompt) {
+    body.text = {
+      format: getChatResponseFormat(character),
+    };
+  }
 
   if (stream) {
     body.stream = true;
@@ -352,12 +460,30 @@ function buildRequestBody(
 
   if (prompt) {
     body.prompt = prompt;
+    const instructionParts: string[] = [];
     if (character === "Rupin") {
-      body.instructions = RUPIN_FALSE_CLAIM_INSTRUCTIONS;
+      instructionParts.push(RUPIN_FALSE_CLAIM_INSTRUCTIONS);
+    }
+    if (extraInstructions?.trim()) {
+      if (character === "Pepper") {
+        instructionParts.push(extraInstructions.trim());
+        instructionParts.push(
+          "Reminder: Pepper mood voice instructions above override any default cheerful or neutral tone from the saved prompt.",
+        );
+      } else {
+        instructionParts.push(extraInstructions.trim());
+      }
+    }
+    if (instructionParts.length > 0) {
+      body.instructions = instructionParts.join("\n\n");
     }
   } else {
     body.model = getModel();
-    body.instructions = CHARACTER_SYSTEM_PROMPTS[character];
+    const instructionParts = [CHARACTER_SYSTEM_PROMPTS[character]];
+    if (extraInstructions?.trim()) {
+      instructionParts.push(extraInstructions.trim());
+    }
+    body.instructions = instructionParts.join("\n\n");
   }
 
   if (previousResponseId) {
@@ -372,12 +498,20 @@ async function responsesChat(
   message: string,
   previousResponseId: string | undefined,
   usePrompt: boolean,
+  extraInstructions?: string,
 ): Promise<{ text: string; responseId: string }> {
   logPromptSelection(character, usePrompt, false);
   const payload = await openaiFetch("/responses", {
     method: "POST",
     body: JSON.stringify(
-      buildRequestBody(character, message, previousResponseId, usePrompt),
+      buildRequestBody(
+        character,
+        message,
+        previousResponseId,
+        usePrompt,
+        false,
+        extraInstructions,
+      ),
     ),
   });
 
@@ -410,8 +544,9 @@ export async function generateChatReply(input: {
   character: CharacterName;
   message: string;
   previousResponseId?: string;
+  extraInstructions?: string;
 }): Promise<{ text: string; responseId: string }> {
-  const hasPrompt = Boolean(getPromptId(input.character));
+  const hasPrompt = usesSavedPrompts() && Boolean(getPromptId(input.character));
 
   if (!hasPrompt) {
     return responsesChat(
@@ -419,6 +554,7 @@ export async function generateChatReply(input: {
       input.message,
       input.previousResponseId,
       false,
+      input.extraInstructions,
     );
   }
 
@@ -428,9 +564,10 @@ export async function generateChatReply(input: {
       input.message,
       input.previousResponseId,
       true,
+      input.extraInstructions,
     );
   } catch (error) {
-    if (!shouldFallbackFromPrompt(error)) {
+    if (!shouldRetryWithoutPrompt(error)) {
       throw error;
     }
     console.warn("[openai] saved prompt failed; retrying with built-in prompt", {
@@ -442,6 +579,7 @@ export async function generateChatReply(input: {
       input.message,
       input.previousResponseId,
       false,
+      input.extraInstructions,
     );
   }
 }
@@ -451,7 +589,7 @@ export async function generateChatReplyStream(input: {
   message: string;
   previousResponseId?: string;
 }): Promise<Response> {
-  const hasPrompt = Boolean(getPromptId(input.character));
+  const hasPrompt = usesSavedPrompts() && Boolean(getPromptId(input.character));
 
   if (!hasPrompt) {
     return responsesChatStream(
@@ -470,7 +608,7 @@ export async function generateChatReplyStream(input: {
       true,
     );
   } catch (error) {
-    if (!shouldFallbackFromPrompt(error)) {
+    if (!shouldRetryWithoutPrompt(error)) {
       throw error;
     }
     console.warn("[openai] saved prompt failed; retrying with built-in prompt", {

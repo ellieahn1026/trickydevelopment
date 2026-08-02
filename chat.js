@@ -1,12 +1,4 @@
 import { setCharacterSpeaking } from "./character-icon-talk.js";
-import {
-  applyMood,
-  getPepperHeadline,
-  getPepperMood,
-  getPepperSendLabel,
-  handlePepperPet,
-} from "./pepper-mood.js";
-import { applyPepperAnswerMood } from "./pepper-answer-mood.js";
 import { evaluateSubmittedMessage, startConversationEndRunaway } from "./runaway-input.js";
 import {
   clearPotterWithdrawShift,
@@ -38,6 +30,11 @@ import {
   parseAssistantResult,
   validateAssistantPayload,
 } from "./lib/assistant-result.ts";
+import { fetchLocalApi } from "./lib/resolve-local-api.ts";
+import {
+  findSpanInText,
+  resolveRupinPushbackPlan,
+} from "./lib/rupin-pushback.ts";
 import potterLoadingIcon from "./assets/icons/potter-loading.svg";
 
 const character = document.body.dataset.character || "Potter";
@@ -66,8 +63,7 @@ const CENSOR_HOLD_MS = 1600;
 const REVISE_TYPE_MS = 22;
 const ERASE_HOLD_MS = 400;
 const ERASE_CHAR_MS = 28;
-const IGNORE_LABEL = "Hey, ignore.";
-const DOUBT_CHANCE = 0.85;
+const IGNORE_LABEL = "Just Ignore";
 
 /** @type {import("./lib/assistant-result.ts").ValidatedAssistantPayload["validation"]} */
 const EMPTY_ASSISTANT_VALIDATION = {
@@ -165,14 +161,7 @@ function logPotterAgentState(result) {
 }
 
 function getRestoredSendLabel() {
-  if (character === "Pepper") {
-    return getPepperSendLabel();
-  }
   return "Send";
-}
-
-function isPepperInputBlocked() {
-  return character === "Pepper" && getPepperMood() === "tired";
 }
 
 function focusInputIfEnabled() {
@@ -231,10 +220,7 @@ function setThinkingHeadline() {
 
 function restoreHeadlineAfterGeneration() {
   headline.classList.remove("is-wave", "is-typing");
-  headline.textContent =
-    character === "Pepper"
-      ? getPepperHeadline()
-      : dockedHeadlines[character] || DEFAULT_HEADLINE;
+  headline.textContent = dockedHeadlines[character] || DEFAULT_HEADLINE;
 }
 
 function cancelGeneration() {
@@ -294,7 +280,7 @@ function dockComposer() {
       }
       composer.classList.add("is-catch-locked", "chat-panel__composer--runaway");
     }
-    if (input) input.disabled = isPepperInputBlocked();
+    if (input) input.disabled = false;
     return;
   }
 
@@ -310,7 +296,7 @@ function dockComposer() {
     composer.style.removeProperty("--catch-y");
   }
 
-  if (input) input.disabled = isPepperInputBlocked();
+  if (input) input.disabled = false;
 }
 
 function appendQuestion(text) {
@@ -447,24 +433,39 @@ function sizeCensorToPhrase(censor, phrase, hostEl) {
   censor.style.minWidth = `${Math.round(phraseWidth)}px`;
 }
 
-function pickDoubtSpan(text, reviseFrom) {
-  if (reviseFrom && text.includes(reviseFrom)) {
-    const start = text.indexOf(reviseFrom);
-    return { start, end: start + reviseFrom.length, phrase: reviseFrom };
-  }
+function sizeInlineCoverToPhrase(cover, phrase, hostEl) {
+  const probe = document.createElement("span");
+  probe.style.cssText =
+    "position:absolute;visibility:hidden;white-space:pre;font:inherit;letter-spacing:inherit";
+  probe.textContent = phrase;
+  hostEl.appendChild(probe);
+  const phraseWidth = Math.max(48, probe.getBoundingClientRect().width + 20);
+  const phraseHeight = Math.max(18, probe.getBoundingClientRect().height + 4);
+  probe.remove();
+  cover.style.minWidth = `${Math.round(phraseWidth)}px`;
+  cover.style.minHeight = `${Math.round(phraseHeight)}px`;
+}
 
-  const words = text.split(" ");
-  if (words.length < 6) return null;
+function createPhraseCover(phrase, hostEl) {
+  const cover = document.createElement("span");
+  cover.className = "chat-phrase-cover";
+  cover.setAttribute("aria-label", "redacted");
+  sizeInlineCoverToPhrase(cover, phrase, hostEl);
+  return cover;
+}
 
-  const startWord = Math.floor(words.length * 0.45);
-  const endWord = Math.min(
-    words.length,
-    startWord + 4 + Math.floor(Math.random() * 3),
-  );
-  const phrase = words.slice(startWord, endWord).join(" ");
-  const start = text.indexOf(phrase);
-  if (start < 0) return null;
-  return { start, end: start + phrase.length, phrase };
+function createIgnoreCover(phrase, hostEl) {
+  const cover = document.createElement("span");
+  cover.className = "chat-ignore-cover";
+  cover.setAttribute("aria-label", IGNORE_LABEL);
+
+  const label = document.createElement("span");
+  label.className = "chat-ignore-cover__label";
+  label.textContent = IGNORE_LABEL;
+  cover.appendChild(label);
+
+  sizeInlineCoverToPhrase(cover, phrase, hostEl);
+  return cover;
 }
 
 function splitAnswerAround(el, text, span) {
@@ -502,17 +503,7 @@ async function appendAnswer(reply, token = generationToken, answerMood = null) {
 
   const isStructured = hasStructuredAnswer(fullText);
   const annotations = typeof reply === "object" ? reply.annotations ?? [] : [];
-  if (
-    character === "Pepper" &&
-    !isStructured &&
-    !answerHasAnnotationSegments(fullText, annotations) &&
-    answerMood &&
-    answerMood !== "common"
-  ) {
-    applyPepperAnswerMood(el, fullText, answerMood);
-  } else {
-    renderAnswer(el, fullText, annotations);
-  }
+  renderAnswer(el, fullText, annotations);
 
   answerHistory.push(
     createAssistantHistoryEntry({
@@ -607,21 +598,51 @@ async function censorAndReviseAnswer(prev, span, token = generationToken) {
   scrollThreadToLatest();
 }
 
-/**
- * Rupin: scrape a target phrase (~5s cascade), then optionally fill with revised text.
- */
-async function rupinRoughEraseAndRevise(prev, token = generationToken) {
-  const shouldDoubt =
-    prev.reviseTo || prev.reviseFrom || prev.reviseIgnore
-      ? true
-      : prev.text.length > 100
-        ? true
-        : Math.random() <= DOUBT_CHANCE;
-  if (!shouldDoubt) return;
+function rupinRedactPhrase(prev, span) {
+  const { before, after, afterNode } = splitAnswerAround(
+    prev.el,
+    prev.text,
+    span,
+  );
+  const cover = createPhraseCover(span.phrase, prev.el);
+  prev.el.insertBefore(cover, afterNode);
+  prev.text = `${before}${after}`;
+  prev.revised = true;
+  scrollThreadToLatest();
+}
 
-  const span = pickDoubtSpan(prev.text, prev.reviseFrom);
-  if (!span) return;
+function rupinIgnorePhrase(prev, span) {
+  const { before, after, afterNode } = splitAnswerAround(
+    prev.el,
+    prev.text,
+    span,
+  );
+  const cover = createIgnoreCover(span.phrase, prev.el);
+  prev.el.insertBefore(cover, afterNode);
+  prev.text = `${before}${IGNORE_LABEL}${after}`;
+  prev.revised = true;
+  scrollThreadToLatest();
+}
 
+function rupinIgnoreFullAnswer(prev) {
+  prev.el.classList.add("chat-answer--fully-ignored");
+  prev.el.replaceChildren();
+
+  const panel = document.createElement("div");
+  panel.className = "chat-answer__ignore-panel";
+
+  const label = document.createElement("span");
+  label.className = "chat-answer__ignore-label";
+  label.textContent = IGNORE_LABEL;
+  panel.appendChild(label);
+  prev.el.appendChild(panel);
+
+  prev.text = IGNORE_LABEL;
+  prev.revised = true;
+  scrollThreadToLatest();
+}
+
+async function rupinReplacePhrase(prev, span, replacement, token = generationToken) {
   const { before, after, afterNode } = splitAnswerAround(
     prev.el,
     prev.text,
@@ -646,30 +667,53 @@ async function rupinRoughEraseAndRevise(prev, token = generationToken) {
   phraseWrap.remove();
   prev.el.classList.remove("is-scrape-erasing");
 
-  if (prev.reviseIgnore) {
-    const censor = createCensor(IGNORE_LABEL);
-    censor.classList.add("chat-censor--ignore");
-    sizeCensorToPhrase(censor, span.phrase, prev.el);
-    prev.el.insertBefore(censor, afterNode);
-    prev.text = `${before}${IGNORE_LABEL}${after}`;
-    prev.revised = true;
-    scrollThreadToLatest();
-    return;
-  }
+  const revisedNode = document.createElement("span");
+  revisedNode.className = "chat-answer__revised";
+  prev.el.insertBefore(revisedNode, afterNode);
+  await typeText(revisedNode, replacement, REVISE_TYPE_MS, token);
 
-  const revised = prev.reviseTo;
-  if (revised) {
-    const revisedNode = document.createElement("span");
-    revisedNode.className = "chat-answer__revised";
-    prev.el.insertBefore(revisedNode, afterNode);
-    await typeText(revisedNode, revised, REVISE_TYPE_MS, token);
-    prev.text = `${before}${revised}${after}`;
-  } else {
-    prev.text = `${before}${after}`;
-  }
-
+  prev.text = `${before}${replacement}${after}`;
   prev.revised = true;
   scrollThreadToLatest();
+}
+
+/**
+ * Rupin pushback: apply revision annotations to the prior answer.
+ */
+async function rupinHandlePushback(prev, annotations, token = generationToken) {
+  const plan = resolveRupinPushbackPlan(annotations, prev.text);
+  if (!plan) return;
+
+  prev.el.classList.add("is-doubting");
+  scrollThreadToLatest();
+
+  try {
+    switch (plan.mode) {
+      case "redact": {
+        const span = findSpanInText(prev.text, plan.from);
+        if (!span) return;
+        rupinRedactPhrase(prev, span);
+        break;
+      }
+      case "ignore-full":
+        rupinIgnoreFullAnswer(prev);
+        break;
+      case "ignore-span": {
+        const span = findSpanInText(prev.text, plan.from);
+        if (!span) return;
+        rupinIgnorePhrase(prev, span);
+        break;
+      }
+      case "replace": {
+        const span = findSpanInText(prev.text, plan.from);
+        if (!span || !plan.replacement) return;
+        await rupinReplacePhrase(prev, span, plan.replacement, token);
+        break;
+      }
+    }
+  } finally {
+    prev.el.classList.remove("is-doubting");
+  }
 }
 
 /** Rupin pushback: type new answer, doubt previous mid-stream, then finish. */
@@ -688,10 +732,9 @@ async function appendAnswerWithInterleavedRevision(reply, token = generationToke
     await typeText(el, head, TYPE_MS, token);
 
     if (prev) {
-      prev.el.classList.add("is-doubting");
-      scrollThreadToLatest();
-      await rupinRoughEraseAndRevise(prev, token);
-      prev.el.classList.remove("is-doubting");
+      const annotations =
+        typeof reply === "object" ? reply.annotations ?? [] : [];
+      await rupinHandlePushback(prev, annotations, token);
     }
 
     if (tail) {
@@ -908,7 +951,7 @@ async function fetchChatReply(message, token, onDelta) {
           previousResponseId: previousResponseIds[character],
         };
 
-  const response = await fetch("/api/chat", {
+  const response = await fetchLocalApi("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(requestBody),
@@ -1240,27 +1283,7 @@ async function appendStreamingAnswer(
     const answerMood = answer.mood;
     el.dataset.answerMood = answerMood;
     const annotations = answer.assistantResult?.annotations ?? [];
-    const isStructured = hasStructuredAnswer(answer.text);
-    const usesAnnotationRenderer = answerHasAnnotationSegments(
-      answer.text,
-      annotations,
-    );
-
-    if (character === "Pepper") {
-      applyMood(answerMood);
-      if (!isStructured && !usesAnnotationRenderer && answerMood !== "common") {
-        applyPepperAnswerMood(el, answer.text, answerMood);
-      }
-    }
-
-    if (
-      character !== "Pepper" ||
-      isStructured ||
-      answerMood === "common" ||
-      usesAnnotationRenderer
-    ) {
-      renderAnswer(el, answer.text, annotations);
-    }
+    renderAnswer(el, answer.text, annotations);
 
     logInteraction("answer.received", {
       mood: answerMood,
@@ -1269,7 +1292,6 @@ async function appendStreamingAnswer(
       hasUncertainty: Boolean(answer.assistantResult?.uncertainty),
       hasRevision: Boolean(answer.assistantResult?.revision),
       annotationCount: answer.assistantResult?.annotations?.length ?? 0,
-      uiMood: character === "Pepper" ? document.body.dataset.pepperMood ?? null : null,
       textLength: answer.text?.length ?? 0,
       isPushback,
     });
@@ -1277,9 +1299,11 @@ async function appendStreamingAnswer(
     if (isPushback && character === "Rupin") {
       const prev = [...answerHistory].reverse().find((entry) => !entry.revised);
       if (prev) {
-        prev.el.classList.add("is-doubting");
-        await rupinRoughEraseAndRevise(prev, token);
-        prev.el.classList.remove("is-doubting");
+        await rupinHandlePushback(
+          prev,
+          answer.assistantResult?.annotations ?? [],
+          token,
+        );
       }
     }
 
@@ -1306,11 +1330,6 @@ form.addEventListener("submit", async (event) => {
 
   if (isGenerating) {
     cancelGeneration();
-    return;
-  }
-
-  if (isPepperInputBlocked()) {
-    handlePepperPet();
     return;
   }
 
