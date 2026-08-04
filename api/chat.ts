@@ -6,6 +6,27 @@ import {
 import { formatOpenAIError, generateChatReplyStream } from "../lib/openai";
 import { handleF1ChatStream, resolveAgentState } from "../src/index.ts";
 
+async function pipeReadableStream(
+  stream: ReadableStream<Uint8Array>,
+  res: { write: (chunk: Buffer) => void },
+): Promise<void> {
+  const reader = stream.getReader();
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      if (value) {
+        res.write(Buffer.from(value));
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed." });
@@ -44,9 +65,7 @@ export default async function handler(req: any, res: any) {
       res.setHeader("Connection", "keep-alive");
       res.flushHeaders?.();
 
-      for await (const chunk of stream) {
-        res.write(Buffer.from(chunk));
-      }
+      await pipeReadableStream(stream, res);
 
       return res.end();
     }
@@ -64,9 +83,7 @@ export default async function handler(req: any, res: any) {
       res.setHeader("Connection", "keep-alive");
       res.flushHeaders?.();
 
-      for await (const chunk of stream) {
-        res.write(Buffer.from(chunk));
-      }
+      await pipeReadableStream(stream, res);
 
       return res.end();
     }
@@ -87,9 +104,7 @@ export default async function handler(req: any, res: any) {
       return res.end();
     }
 
-    for await (const chunk of upstream.body) {
-      res.write(Buffer.from(chunk));
-    }
+    await pipeReadableStream(upstream.body, res);
 
     return res.end();
   } catch (error) {
