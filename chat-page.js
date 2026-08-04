@@ -264,4 +264,58 @@ function chatPage({
 </html>`;
 }
 
-export { chatPage };
+function pepperPage() {
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PepperGPT — hackedGPT</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;600;700&family=Xanh+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./orbit-kr.css" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-character="Pepper">
+    <div class="screen">
+      <div class="stage">
+        <svg class="composer-trail" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+          <path class="composer-trail__path" />
+        </svg>
+        <header class="brand">
+          <a href="${BOOT_ENTRY_HREF}"><h1>hackedGPT</h1></a>
+        </header>
+
+        <nav class="characters" aria-label="Characters">
+          ${characterButtons("Pepper")}
+        </nav>
+
+        <div class="user-badge-zone">
+          <div class="user-badge__rule" aria-hidden="true"></div>
+          <div class="user-badge" aria-label="User profile">
+            <span class="user-badge__avatar" aria-hidden="true">
+              <span class="user-badge__initial" id="user-initial">E</span>
+            </span>
+            <span class="user-badge__name" id="user-display-name">Ellie</span>
+          </div>
+        </div>
+
+        <div class="sideline" aria-hidden="true"></div>
+
+        <div id="pepper-chat-root"></div>
+      </div>
+    </div>
+
+    <script type="module" src="./nav.js"></script>
+    <script type="module" src="./user-badge.js"></script>
+    <script type="module" src="./src/pepper-main.tsx"></script>
+  </body>
+</html>`;
+}
+
+export { chatPage, pepperPage };

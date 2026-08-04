@@ -1,4 +1,4 @@
-import { chatPage } from "./chat-page.js";
+import { chatPage, pepperPage } from "./chat-page.js";
 import { writeFileSync } from "node:fs";
 
 const DEFAULT_HEADLINE = "You want to talk with me? Follow.";
@@ -24,15 +24,7 @@ writeFileSync(
   }),
 );
 
-writeFileSync(
-  "pepper.html",
-  chatPage({
-    activeName: "Pepper",
-    title: "PepperGPT — hackedGPT",
-    headline: "What do you want to talk about?",
-    placeholder: "Ask to PepperGPT",
-  }),
-);
+writeFileSync("pepper.html", pepperPage());
 
 writeFileSync(
   "f1.html",

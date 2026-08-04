@@ -108,33 +108,13 @@
 
         <div class="sideline" aria-hidden="true"></div>
 
-        <main class="chat-panel">
-          <div class="chat-panel__thread" id="chat-thread" aria-live="polite"></div>
-          <div class="chat-panel__composer" id="chat-composer">
-            <p class="prompt__headline" id="chat-headline" data-default-headline="What do you want to talk about?">What do you want to talk about?</p>
-            <form class="prompt__form" id="chat-form">
-              <div class="prompt__field">
-                <input
-                  type="text"
-                  id="chat-input"
-                  name="message"
-                  placeholder="Ask to PepperGPT"
-                  autocomplete="off"
-                  aria-label="Ask to PepperGPT"
-                />
-                <button type="submit" class="prompt__send ">Send</button>
-              </div>
-            </form>
-          </div>
-        </main>
+        <div id="pepper-chat-root"></div>
       </div>
     </div>
 
-    <script type="module" src="./composer-layout.js"></script>
     <script type="module" src="./nav.js"></script>
     <script type="module" src="./user-badge.js"></script>
-    <script type="module" src="./runaway-input.js"></script>
-    <script type="module" src="./chat.js"></script>
+    <script type="module" src="./src/pepper-main.tsx"></script>
     
   </body>
 </html>

@@ -3,12 +3,48 @@ const MENU_HIGHLIGHT_MS = 1000;
 const FLICKER_MS = 1600;
 const COLLAPSE_MS = 950;
 const REVEAL_MS = 550;
-const PIXEL_CELL = 24;
-const PIXEL_SPREAD_MS = 1300;
+const PIXEL_CELL = 32;
+const PIXEL_SPREAD_MS = 1450;
 const PIXEL_BLUE_FILL_MS = 520;
 const PIXEL_BLUE = "#0000aa";
 const PIXEL_BLACK = "#000000";
-const PIXEL_CHARS = ["±", "+", "0", "x", "?", "#"];
+const PIXEL_WORDS = ["chat gpt", "lie", "UX", "fake"];
+
+function pickWordFragment(word) {
+  const compact = word.replace(/\s+/g, "");
+  const roll = Math.random();
+
+  if (roll < 0.34) {
+    return word;
+  }
+
+  if (roll < 0.72) {
+    const parts = word.split(/\s+/).filter(Boolean);
+    const source =
+      parts.length > 1 && Math.random() < 0.45
+        ? parts[Math.floor(Math.random() * parts.length)]
+        : compact;
+    if (source.length <= 1) return source;
+
+    const fragLen = 1 + Math.floor(Math.random() * Math.min(4, source.length));
+    const start = Math.floor(Math.random() * (source.length - fragLen + 1));
+    return source.slice(start, start + fragLen);
+  }
+
+  const letters = [...compact];
+  const pickCount = Math.random() < 0.5 ? 1 : Math.min(2 + Math.floor(Math.random() * 2), letters.length);
+  const picked = [];
+  for (let i = 0; i < pickCount; i += 1) {
+    picked.push(letters[Math.floor(Math.random() * letters.length)]);
+  }
+
+  return picked.join(Math.random() < 0.62 ? " " : "");
+}
+
+function pickPixelLabel() {
+  const word = PIXEL_WORDS[Math.floor(Math.random() * PIXEL_WORDS.length)];
+  return pickWordFragment(word);
+}
 
 function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -81,24 +117,24 @@ function pickPixelColor(biasBlue = 0.5) {
 
 function pickBlockKind() {
   const roll = Math.random();
-  if (roll < 0.44) return "solid";
+  if (roll < 0.52) return "solid";
   if (roll < 0.78) return "dither";
   return "char";
 }
 
-function getViewportPixelSize() {
-  const viewport = window.visualViewport;
-  const width = Math.ceil(
-    viewport?.width ?? window.innerWidth ?? document.documentElement.clientWidth,
-  );
-  const height = Math.ceil(
-    viewport?.height ?? window.innerHeight ?? document.documentElement.clientHeight,
-  );
+function pickColumnGrowMs() {
+  return 180 + Math.random() * 580;
+}
 
-  return {
-    width: Math.max(width, 1),
-    height: Math.max(height, 1),
-  };
+function pickDecorativeGrowMs() {
+  return 110 + Math.random() * 380;
+}
+
+function getBootScreenPixelSize(screen) {
+  const width = Math.max(screen?.clientWidth ?? 0, 1);
+  const height = Math.max(screen?.clientHeight ?? 0, 1);
+
+  return { width, height };
 }
 
 function generatePixelColumns(width, height, cellW, spreadMs) {
@@ -106,53 +142,69 @@ function generatePixelColumns(width, height, cellW, spreadMs) {
   const cols = Math.ceil(width / cellW) + 1;
   const rows = Math.ceil(height / cellW) + 1;
   const fullHeight = rows * cellW;
-  const decorativeCount = Math.floor(cols * rows * 0.12);
+  const decorativeCount = Math.floor(cols * rows * 0.2);
 
   for (let col = 0; col < cols; col += 1) {
+    const spanW = Math.random() < 0.78 ? 1 : 2;
+    if (col + spanW > cols) continue;
+
     const grow = col % 2 === 0 ? "down" : "up";
     const anchorRow = grow === "down" ? 0 : rows - 1;
-    const blueBias = 0.34 + (col / Math.max(cols, 1)) * 0.42;
+    const blueBias = 0.32 + (col / Math.max(cols, 1)) * 0.42;
     const primary = pickPixelColor(blueBias);
     const secondary = primary === PIXEL_BLUE ? PIXEL_BLACK : PIXEL_BLUE;
 
     blocks.push({
       x: col * cellW,
       y: anchorRow * cellW,
-      w: cellW,
+      w: spanW * cellW,
       targetH: fullHeight,
       grow,
       kind: pickBlockKind(),
       color: primary,
       altColor: secondary,
-      char: PIXEL_CHARS[Math.floor(Math.random() * PIXEL_CHARS.length)],
-      revealAt: (col / Math.max(cols, 1)) * spreadMs * 0.78 + Math.random() * 36,
-      growMs: 110 + Math.random() * 420,
+      label: pickPixelLabel(),
+      revealAt: (col / Math.max(cols, 1)) * spreadMs * 0.82 + Math.random() * 64,
+      growMs: pickColumnGrowMs(),
       alpha: 0,
     });
   }
 
   for (let i = 0; i < decorativeCount; i += 1) {
-    const spanW = Math.random() < 0.72 ? 1 : 2;
+    const spanW = Math.random() < 0.62 ? 1 : Math.random() < 0.7 ? 2 : 3;
     const col = Math.floor(Math.random() * Math.max(1, cols - spanW + 1));
-    const grow = Math.random() < 0.5 ? "down" : "up";
-    const anchorRow = grow === "down"
-      ? Math.floor(Math.random() * Math.max(1, rows - 1))
-      : Math.floor(Math.random() * rows);
-    const primary = pickPixelColor(0.62);
+    const targetCells = 1 + Math.floor(Math.pow(Math.random(), 0.62) * 9);
+    const maxCells = Math.min(targetCells, rows);
+    const growMode = Math.random();
+    const blueBias = 0.26 + (i / Math.max(decorativeCount, 1)) * 0.36;
+    const primary = pickPixelColor(blueBias);
     const secondary = primary === PIXEL_BLUE ? PIXEL_BLACK : PIXEL_BLUE;
+
+    let y;
+    let grow;
+    if (growMode < 0.42) {
+      grow = "down";
+      y = Math.floor(Math.random() * Math.max(1, rows - maxCells + 1)) * cellW;
+    } else if (growMode < 0.84) {
+      grow = "up";
+      y = Math.floor(Math.random() * rows) * cellW;
+    } else {
+      grow = "both";
+      y = Math.floor(Math.random() * rows) * cellW;
+    }
 
     blocks.push({
       x: col * cellW,
-      y: anchorRow * cellW,
+      y,
       w: spanW * cellW,
-      targetH: (1 + Math.floor(Math.random() * rows)) * cellW,
+      targetH: maxCells * cellW,
       grow,
       kind: pickBlockKind(),
       color: primary,
       altColor: secondary,
-      char: PIXEL_CHARS[Math.floor(Math.random() * PIXEL_CHARS.length)],
-      revealAt: Math.random() * spreadMs * 0.9,
-      growMs: 90 + Math.random() * 280,
+      label: pickPixelLabel(),
+      revealAt: Math.random() * spreadMs * 0.94,
+      growMs: pickDecorativeGrowMs(),
       alpha: 0,
     });
   }
@@ -166,8 +218,8 @@ function getBlockDrawRect(block, elapsed, cellW) {
   if (t < 0) return null;
 
   const growProgress = Math.min(1, t / block.growMs);
-  const eased = 1 - (1 - growProgress) ** 2.4;
-  const currentH = Math.max(cellW * 0.5, block.targetH * eased);
+  const eased = 1 - (1 - growProgress) ** 2;
+  const currentH = Math.max(cellW * 0.35, block.targetH * eased);
 
   if (block.grow === "down") {
     return { x: block.x, y: block.y, w: block.w, h: currentH };
@@ -179,6 +231,53 @@ function getBlockDrawRect(block, elapsed, cellW) {
 
   const half = currentH * 0.5;
   return { x: block.x, y: block.y - half, w: block.w, h: currentH };
+}
+
+function drawPixelLabel(ctx, label, rect, color) {
+  const pad = 1;
+  const innerW = Math.max(rect.w - pad * 2, 1);
+  const innerH = Math.max(rect.h - pad * 2, 1);
+  const cx = rect.x + rect.w * 0.5;
+  const cy = rect.y + rect.h * 0.5;
+  const fontFamily = '"IBM Plex Mono", "Courier New", monospace';
+  const maxFontSize = 26;
+  const minFontSize = 10;
+
+  ctx.fillStyle = color;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  const vertical = innerH > innerW * 1.6;
+
+  if (vertical) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(-Math.PI / 2);
+
+    let fontSize = Math.min(innerH * 0.9, maxFontSize);
+    ctx.font = `${fontSize}px ${fontFamily}`;
+    let metrics = ctx.measureText(label);
+    while (metrics.width > innerH * 0.96 && fontSize > minFontSize) {
+      fontSize -= 1;
+      ctx.font = `${fontSize}px ${fontFamily}`;
+      metrics = ctx.measureText(label);
+    }
+
+    ctx.fillText(label, 0, 0);
+    ctx.restore();
+    return;
+  }
+
+  let fontSize = Math.min(innerW * 0.68, innerH * 0.92, maxFontSize);
+  ctx.font = `${fontSize}px ${fontFamily}`;
+  let metrics = ctx.measureText(label);
+  while ((metrics.width > innerW * 0.96 || fontSize > innerH * 0.92) && fontSize > minFontSize) {
+    fontSize -= 1;
+    ctx.font = `${fontSize}px ${fontFamily}`;
+    metrics = ctx.measureText(label);
+  }
+
+  ctx.fillText(label, cx, cy);
 }
 
 function drawPixelBlock(ctx, block, patterns, rect) {
@@ -197,12 +296,10 @@ function drawPixelBlock(ctx, block, patterns, rect) {
   } else {
     ctx.fillStyle = block.color;
     ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-    const fontSize = Math.max(8, Math.min(rect.w, rect.h) * 0.72);
-    ctx.fillStyle = block.altColor;
-    ctx.font = `${fontSize}px "IBM Plex Mono", "Courier New", monospace`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(block.char, rect.x + rect.w * 0.5, rect.y + rect.h * 0.5);
+    ctx.beginPath();
+    ctx.rect(rect.x, rect.y, rect.w, rect.h);
+    ctx.clip();
+    drawPixelLabel(ctx, block.label, rect, block.altColor);
   }
 
   ctx.restore();
@@ -212,14 +309,12 @@ function startPixelSpread(screen) {
   const canvas = document.createElement("canvas");
   canvas.className = "boot-pixel-canvas";
   canvas.setAttribute("aria-hidden", "true");
-  document.body.appendChild(canvas);
+  screen.appendChild(canvas);
 
-  const { width, height } = getViewportPixelSize();
+  const { width, height } = getBootScreenPixelSize(screen);
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = Math.ceil(width * dpr);
   canvas.height = Math.ceil(height * dpr);
-  canvas.style.width = `${width}px`;
-  canvas.style.height = `${height}px`;
 
   const ctx = canvas.getContext("2d");
   if (!ctx) {
@@ -246,7 +341,8 @@ function startPixelSpread(screen) {
       if (!startTime) startTime = now;
       const elapsed = now - startTime;
 
-      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = PIXEL_BLACK;
+      ctx.fillRect(0, 0, width, height);
 
       for (const block of blocks) {
         const rect = getBlockDrawRect(block, elapsed, PIXEL_CELL);
