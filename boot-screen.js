@@ -86,74 +86,73 @@ function pickBlockKind() {
   return "char";
 }
 
+function getViewportPixelSize() {
+  const viewport = window.visualViewport;
+  const width = Math.ceil(
+    viewport?.width ?? window.innerWidth ?? document.documentElement.clientWidth,
+  );
+  const height = Math.ceil(
+    viewport?.height ?? window.innerHeight ?? document.documentElement.clientHeight,
+  );
+
+  return {
+    width: Math.max(width, 1),
+    height: Math.max(height, 1),
+  };
+}
+
 function generatePixelColumns(width, height, cellW, spreadMs) {
   const blocks = [];
-  const cols = Math.ceil(width / cellW);
-  const rows = Math.ceil(height / cellW);
-  const targetCount = Math.floor(cols * rows * 0.34);
+  const cols = Math.ceil(width / cellW) + 1;
+  const rows = Math.ceil(height / cellW) + 1;
+  const fullHeight = rows * cellW;
+  const decorativeCount = Math.floor(cols * rows * 0.12);
 
-  for (let i = 0; i < targetCount; i += 1) {
-    const spanW = Math.random() < 0.5 ? 1 : Math.random() < 0.55 ? 2 : 3;
-    const col = Math.floor(Math.random() * Math.max(1, cols - spanW + 1));
-    const targetCells = 1 + Math.floor(Math.pow(Math.random(), 0.68) * 10);
-    const maxCells = Math.min(targetCells, rows);
-    const growMode = Math.random();
-    const blueBias = 0.28 + (i / Math.max(targetCount, 1)) * 0.38;
+  for (let col = 0; col < cols; col += 1) {
+    const grow = col % 2 === 0 ? "down" : "up";
+    const anchorRow = grow === "down" ? 0 : rows - 1;
+    const blueBias = 0.34 + (col / Math.max(cols, 1)) * 0.42;
     const primary = pickPixelColor(blueBias);
     const secondary = primary === PIXEL_BLUE ? PIXEL_BLACK : PIXEL_BLUE;
 
-    let y;
-    let grow;
-    if (growMode < 0.38) {
-      grow = "down";
-      y = Math.floor(Math.random() * Math.max(1, rows - maxCells + 1)) * cellW;
-    } else if (growMode < 0.76) {
-      grow = "up";
-      y = Math.floor(Math.random() * rows) * cellW;
-    } else {
-      grow = "both";
-      y = Math.floor(Math.random() * rows) * cellW;
-    }
-
     blocks.push({
       x: col * cellW,
-      y,
-      w: spanW * cellW,
-      targetH: maxCells * cellW,
+      y: anchorRow * cellW,
+      w: cellW,
+      targetH: fullHeight,
       grow,
       kind: pickBlockKind(),
       color: primary,
       altColor: secondary,
       char: PIXEL_CHARS[Math.floor(Math.random() * PIXEL_CHARS.length)],
-      revealAt: Math.random() * spreadMs * 0.96,
-      growMs: 90 + Math.random() * 520,
+      revealAt: (col / Math.max(cols, 1)) * spreadMs * 0.78 + Math.random() * 36,
+      growMs: 110 + Math.random() * 420,
       alpha: 0,
     });
   }
 
-  for (let col = 0; col < cols; col += 1) {
-    if (Math.random() > 0.58) continue;
-
-    const spanW = Math.random() < 0.82 ? 1 : 2;
-    if (col + spanW > cols) continue;
-
+  for (let i = 0; i < decorativeCount; i += 1) {
+    const spanW = Math.random() < 0.72 ? 1 : 2;
+    const col = Math.floor(Math.random() * Math.max(1, cols - spanW + 1));
     const grow = Math.random() < 0.5 ? "down" : "up";
     const anchorRow = grow === "down"
-      ? Math.floor(Math.random() * Math.max(1, rows - 2))
+      ? Math.floor(Math.random() * Math.max(1, rows - 1))
       : Math.floor(Math.random() * rows);
+    const primary = pickPixelColor(0.62);
+    const secondary = primary === PIXEL_BLUE ? PIXEL_BLACK : PIXEL_BLUE;
 
     blocks.push({
       x: col * cellW,
       y: anchorRow * cellW,
       w: spanW * cellW,
-      targetH: (1 + Math.floor(Math.random() * (rows - anchorRow))) * cellW,
+      targetH: (1 + Math.floor(Math.random() * rows)) * cellW,
       grow,
-      kind: "solid",
-      color: PIXEL_BLUE,
-      altColor: PIXEL_BLACK,
-      char: "",
-      revealAt: spreadMs + Math.random() * PIXEL_BLUE_FILL_MS * 0.82,
-      growMs: 70 + Math.random() * 220,
+      kind: pickBlockKind(),
+      color: primary,
+      altColor: secondary,
+      char: PIXEL_CHARS[Math.floor(Math.random() * PIXEL_CHARS.length)],
+      revealAt: Math.random() * spreadMs * 0.9,
+      growMs: 90 + Math.random() * 280,
       alpha: 0,
     });
   }
@@ -213,11 +212,9 @@ function startPixelSpread(screen) {
   const canvas = document.createElement("canvas");
   canvas.className = "boot-pixel-canvas";
   canvas.setAttribute("aria-hidden", "true");
-  screen.appendChild(canvas);
+  document.body.appendChild(canvas);
 
-  const screenRect = screen.getBoundingClientRect();
-  const width = Math.round(screenRect.width) || window.innerWidth;
-  const height = Math.round(screenRect.height) || window.innerHeight;
+  const { width, height } = getViewportPixelSize();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = Math.ceil(width * dpr);
   canvas.height = Math.ceil(height * dpr);
