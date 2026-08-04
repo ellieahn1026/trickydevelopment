@@ -25,10 +25,10 @@ function withLastActionBias(
 ): WeightedAction[] {
   const boost: Partial<Record<AgentAction, Partial<Record<AgentAction, number>>>> =
     {
-      silence: { withdraw: 4, end: 5, silence: 2 },
-      withdraw: { end: 8, silence: 3, withdraw: 2 },
-      short: { silence: 3, hesitate: 2, withdraw: 1, end: 3 },
-      hesitate: { silence: 2, short: 2, withdraw: 1, end: 2 },
+      silence: { withdraw: 6, end: 8, silence: 3 },
+      withdraw: { end: 12, silence: 5, withdraw: 3 },
+      short: { silence: 5, hesitate: 2, withdraw: 3, end: 5 },
+      hesitate: { silence: 4, short: 2, withdraw: 3, end: 4 },
     };
 
   const deltas = boost[lastAction];
@@ -44,15 +44,15 @@ export function chooseAction(state: AgentState): AgentAction {
   const { fatigue, willingness, distance, interest, turnCount, lastAction } =
     state;
 
-  if (fatigue > 0.6 && willingness < 0.4) {
+  if (fatigue > 0.42 && willingness < 0.52) {
     return pickWeighted(
       withLastActionBias(
         [
-          { action: "end", weight: 36 },
-          { action: "withdraw", weight: 10 },
-          { action: "silence", weight: 12 },
-          { action: "short", weight: 16 },
-          { action: "respond", weight: 20 },
+          { action: "end", weight: 48 },
+          { action: "withdraw", weight: 16 },
+          { action: "silence", weight: 18 },
+          { action: "short", weight: 12 },
+          { action: "respond", weight: 10 },
         ],
         lastAction,
       ),
@@ -62,16 +62,80 @@ export function chooseAction(state: AgentState): AgentAction {
   if (
     lastAction === "silence" ||
     lastAction === "withdraw" ||
-    (lastAction === "short" && turnCount >= 4)
+    (lastAction === "short" && turnCount >= 3)
   ) {
     return pickWeighted(
       withLastActionBias(
         [
-          { action: "respond", weight: 32 },
+          { action: "respond", weight: 22 },
+          { action: "hesitate", weight: 14 },
+          { action: "short", weight: 12 },
+          { action: "silence", weight: 16 },
+          { action: "withdraw", weight: 14 },
+          { action: "end", weight: 24 },
+        ],
+        lastAction,
+      ),
+    );
+  }
+
+  if (distance > 0.48 || willingness < 0.48) {
+    return pickWeighted(
+      withLastActionBias(
+        [
+          { action: "respond", weight: 20 },
           { action: "hesitate", weight: 16 },
           { action: "short", weight: 14 },
-          { action: "silence", weight: 10 },
-          { action: "withdraw", weight: 8 },
+          { action: "silence", weight: 18 },
+          { action: "withdraw", weight: 14 },
+          { action: "end", weight: 20 },
+        ],
+        lastAction,
+      ),
+    );
+  }
+
+  if (fatigue > 0.38 || turnCount >= 4) {
+    return pickWeighted(
+      withLastActionBias(
+        [
+          { action: "respond", weight: 22 },
+          { action: "short", weight: 16 },
+          { action: "hesitate", weight: 14 },
+          { action: "silence", weight: 16 },
+          { action: "withdraw", weight: 12 },
+          { action: "end", weight: 22 },
+        ],
+        lastAction,
+      ),
+    );
+  }
+
+  if (interest < 0.42) {
+    return pickWeighted(
+      withLastActionBias(
+        [
+          { action: "respond", weight: 24 },
+          { action: "short", weight: 18 },
+          { action: "hesitate", weight: 14 },
+          { action: "silence", weight: 16 },
+          { action: "withdraw", weight: 12 },
+          { action: "end", weight: 18 },
+        ],
+        lastAction,
+      ),
+    );
+  }
+
+  if (turnCount >= 2) {
+    return pickWeighted(
+      withLastActionBias(
+        [
+          { action: "respond", weight: 36 },
+          { action: "hesitate", weight: 14 },
+          { action: "short", weight: 14 },
+          { action: "silence", weight: 12 },
+          { action: "withdraw", weight: 10 },
           { action: "end", weight: 16 },
         ],
         lastAction,
@@ -79,73 +143,13 @@ export function chooseAction(state: AgentState): AgentAction {
     );
   }
 
-  if (distance > 0.65 || willingness < 0.35) {
-    return pickWeighted(
-      withLastActionBias(
-        [
-          { action: "respond", weight: 30 },
-          { action: "hesitate", weight: 20 },
-          { action: "short", weight: 18 },
-          { action: "silence", weight: 12 },
-          { action: "withdraw", weight: 6 },
-          { action: "end", weight: 10 },
-        ],
-        lastAction,
-      ),
-    );
-  }
-
-  if (fatigue > 0.5 || turnCount >= 7) {
-    return pickWeighted(
-      withLastActionBias(
-        [
-          { action: "respond", weight: 32 },
-          { action: "short", weight: 22 },
-          { action: "hesitate", weight: 16 },
-          { action: "silence", weight: 10 },
-          { action: "withdraw", weight: 6 },
-          { action: "end", weight: 12 },
-        ],
-        lastAction,
-      ),
-    );
-  }
-
-  if (interest < 0.3) {
-    return pickWeighted(
-      withLastActionBias(
-        [
-          { action: "respond", weight: 36 },
-          { action: "short", weight: 22 },
-          { action: "hesitate", weight: 14 },
-          { action: "silence", weight: 10 },
-          { action: "withdraw", weight: 6 },
-          { action: "end", weight: 8 },
-        ],
-        lastAction,
-      ),
-    );
-  }
-
-  if (turnCount >= 4) {
-    return pickWeighted(
-      withLastActionBias(
-        [
-          { action: "respond", weight: 52 },
-          { action: "hesitate", weight: 14 },
-          { action: "short", weight: 16 },
-          { action: "silence", weight: 8 },
-          { action: "end", weight: 6 },
-        ],
-        lastAction,
-      ),
-    );
-  }
-
   return pickWeighted([
-    { action: "respond", weight: 72 },
+    { action: "respond", weight: 46 },
     { action: "hesitate", weight: 14 },
     { action: "short", weight: 14 },
+    { action: "silence", weight: 10 },
+    { action: "withdraw", weight: 8 },
+    { action: "end", weight: 10 },
   ]);
 }
 

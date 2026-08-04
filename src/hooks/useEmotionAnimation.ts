@@ -1,6 +1,12 @@
 import { useMemo } from "react";
 
 import {
+  computeHappyEdmIntensityT,
+} from "../lib/happyEdmBeat.ts";
+import {
+  computeAngryHipHopIntensityT,
+} from "../lib/angryHipHopBeat.ts";
+import {
   getEmotionVisualConfig,
   type EmotionVisualConfig,
 } from "../config/emotionVisualConfig.ts";
@@ -31,6 +37,15 @@ export const EMOTION_ANIMATION_BOUNDS = {
   groggySpeedIntensityCap: 0.38,
 } as const;
 
+/** Happy wave path gets more uneven as intensity rises (groggy/angry use mood config). */
+export const HAPPY_WAVE_RANDOMNESS = {
+  irregularityAtZero: 0.02,
+  irregularityAtFull: 0.82,
+  jitterAtZero: 0,
+  jitterAtFull: 0.52,
+  curvePower: 3.6,
+} as const;
+
 export type EmotionAnimationParams = {
   normalizedIntensity: number;
   amplitude: number;
@@ -46,6 +61,27 @@ function clamp(value: number, min: number, max: number): number {
 
 function lerp(start: number, end: number, t: number): number {
   return start + (end - start) * t;
+}
+
+export function computeHappyWaveRandomness(intensity: number): {
+  irregularity: number;
+  jitter: number;
+} {
+  const t =
+    (clamp(intensity, 0, 100) / 100) ** HAPPY_WAVE_RANDOMNESS.curvePower;
+
+  return {
+    irregularity: lerp(
+      HAPPY_WAVE_RANDOMNESS.irregularityAtZero,
+      HAPPY_WAVE_RANDOMNESS.irregularityAtFull,
+      t,
+    ),
+    jitter: lerp(
+      HAPPY_WAVE_RANDOMNESS.jitterAtZero,
+      HAPPY_WAVE_RANDOMNESS.jitterAtFull,
+      t,
+    ),
+  };
 }
 
 export function computeEmotionAnimationParams(
@@ -77,13 +113,41 @@ export function computeEmotionAnimationParams(
     normalizedIntensity,
   );
 
+  const happyRandomness =
+    config.mood === "happy"
+      ? computeHappyWaveRandomness(emotion.intensity)
+      : null;
+
+  const happyEdmDrive =
+    config.mood === "happy"
+      ? 1 + computeHappyEdmIntensityT(emotion.intensity) ** 1.35 * 0.24
+      : 1;
+
+  const angryHipHopDrive =
+    config.mood === "angry"
+      ? 1 + computeAngryHipHopIntensityT(emotion.intensity) ** 1.3 * 0.28
+      : 1;
+
+  const moodSpeedDrive = config.mood === "happy" ? happyEdmDrive : angryHipHopDrive;
+
   return {
     normalizedIntensity,
     amplitude: baseAmplitude * wave.amplitudeMultiplier,
-    speed: baseSpeed * wave.speedMultiplier,
-    frequency: baseFrequency * wave.frequencyMultiplier,
-    irregularity: lerp(bounds.irregularity.atZero, wave.irregularity, normalizedIntensity),
-    jitter: config.mood === "happy" ? 0 : lerp(bounds.jitter.atZero, wave.jitter, normalizedIntensity),
+    speed: baseSpeed * wave.speedMultiplier * moodSpeedDrive,
+    frequency:
+      baseFrequency *
+      wave.frequencyMultiplier *
+      (config.mood === "happy"
+        ? 1 + computeHappyEdmIntensityT(emotion.intensity) ** 1.35 * 0.16
+        : config.mood === "angry"
+          ? 1 + computeAngryHipHopIntensityT(emotion.intensity) ** 1.25 * 0.2
+          : 1),
+    irregularity: happyRandomness
+      ? happyRandomness.irregularity
+      : lerp(bounds.irregularity.atZero, wave.irregularity, normalizedIntensity),
+    jitter: happyRandomness
+      ? happyRandomness.jitter
+      : lerp(bounds.jitter.atZero, wave.jitter, normalizedIntensity),
   };
 }
 

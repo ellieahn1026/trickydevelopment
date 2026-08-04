@@ -31,13 +31,13 @@ export type AgentStateChanges = {
   distanceChange: number;
 };
 
-export const PER_TURN_FATIGUE = 0.01;
+export const PER_TURN_FATIGUE = 0.028;
 
 export const INITIAL_AGENT_STATE: AgentState = {
-  willingness: 0.7,
-  fatigue: 0.2,
-  interest: 0.55,
-  distance: 0.25,
+  willingness: 0.52,
+  fatigue: 0.38,
+  interest: 0.38,
+  distance: 0.42,
   conversationOpen: true,
   turnCount: 0,
   lastAction: "respond",

@@ -6,12 +6,13 @@ import {
   setDistantHeadline,
   setConversationEndHeadline,
 } from "./headline-type.js";
-import { scoreInput } from "./input-score.js";
+import { isLowScore, scoreInput } from "./input-score.js";
 import { recordComposerCenter } from "./composer-trail.js";
 import { logInteraction } from "./interaction-log.js";
+import { syncComposerWidth } from "./composer-layout.js";
 
-const CURSOR_RADIUS = 36;
-const REPEL_RADIUS = 200;
+const CURSOR_RADIUS = 58;
+const REPEL_RADIUS = 248;
 const WALL_BOUNCE = 0.72;
 const FRICTION = 0.994;
 const ESCAPE_FRICTION = 0.996;
@@ -27,26 +28,21 @@ const PENALTY_MIN_CATCH_MS = 5_000;
 const PENALTY_MAX_CATCH_MS = 10_000;
 const END_RUNAWAY_MAX_MS = 15_000;
 const SEND_LEAVE_DIST = 72;
-const COMPOSER_MIN_W = 286;
-const COMPOSER_MAX_W_FALLBACK = 1000;
-
-function getComposerMaxW() {
-  const raw = getComputedStyle(document.body).getPropertyValue("--composer-w").trim();
-  const parsed = parseFloat(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : COMPOSER_MAX_W_FALLBACK;
-}
+const LOADING_BOUNCE_MS = 580;
 
 const composer = document.querySelector(".chat-panel__composer");
 const input = document.getElementById("chat-input");
 const headline = document.getElementById("chat-headline");
 const sendButton = document.querySelector(".prompt__send");
-const sideline = document.querySelector(".sideline");
 
 /** @type {(message: string, onCaught?: () => void) => { deferred: boolean }} */
 let evaluateSubmittedMessage = () => ({ deferred: false });
 
 /** @type {(onCaught?: () => void) => void} */
 let startConversationEndRunaway = () => {};
+
+/** @type {(active: boolean) => void} */
+let notifyPotterGenerationChange = () => {};
 
 if (!composer || !input) {
   console.warn("Runaway input: required elements not found");
@@ -72,8 +68,63 @@ if (!composer || !input) {
   let lowScoreStrikes = 0;
   let penaltyRunawayActive = false;
   let conversationEndRunawayActive = false;
+  let loadingPenaltyEvasion = false;
+  let loadingBounceAnimating = false;
+  let loadingBounceTimer = 0;
+  let composerHoveredDuringLoading = false;
   let pendingCaughtCallback = null;
   let activeMaxDodgeMs = INITIAL_MAX_DODGE_MS;
+  /** @type {HTMLDivElement | null} */
+  let composerLane = null;
+  let mouseLaneX = -9999;
+  let mouseLaneY = -9999;
+
+  function layoutZoom() {
+    const z = parseFloat(getComputedStyle(document.documentElement).zoom);
+    return Number.isFinite(z) && z > 0 ? z : 1;
+  }
+
+  function ensureComposerLane() {
+    if (composerLane?.isConnected) return composerLane;
+    composerLane = document.createElement("div");
+    composerLane.className = "potter-composer-lane";
+    composerLane.setAttribute("aria-hidden", "true");
+    document.body.appendChild(composerLane);
+    return composerLane;
+  }
+
+  /** Move composer into the sideline-right lane; positions use lane-local layout px. */
+  function mountComposerInLane() {
+    const lane = ensureComposerLane();
+    if (composer.parentElement === lane) return;
+
+    const rect = composer.getBoundingClientRect();
+    const laneRect = lane.getBoundingClientRect();
+    const z = layoutZoom();
+
+    lane.appendChild(composer);
+
+    posX = Math.max(0, (rect.left - laneRect.left) / z);
+    posY = Math.max(0, (rect.top - laneRect.top) / z);
+  }
+
+  function pointerToLane(clientX, clientY) {
+    if (!composerLane) return { x: clientX, y: clientY };
+    const laneRect = composerLane.getBoundingClientRect();
+    const z = layoutZoom();
+    return {
+      x: (clientX - laneRect.left) / z,
+      y: (clientY - laneRect.top) / z,
+    };
+  }
+
+  function syncPointerLane(clientX, clientY) {
+    mouseX = clientX;
+    mouseY = clientY;
+    const p = pointerToLane(clientX, clientY);
+    mouseLaneX = p.x;
+    mouseLaneY = p.y;
+  }
 
   function distanceCursorToComposer() {
     const rect = composer.getBoundingClientRect();
@@ -84,10 +135,10 @@ if (!composer || !input) {
 
   /** Same proximity used when composer starts bouncing away. */
   function isCursorInBounceRange() {
-    syncSize();
-    const cx = posX + sizeW / 2;
-    const cy = posY + sizeH / 2;
-    const ballRadius = Math.min(sizeW, sizeH) * 0.5;
+    const rect = composer.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const ballRadius = Math.min(rect.width, rect.height) * 0.5;
     const centerDist = Math.hypot(cx - mouseX, cy - mouseY);
     return (
       distanceCursorToComposer() < CURSOR_RADIUS ||
@@ -95,13 +146,27 @@ if (!composer || !input) {
     );
   }
 
+  function isPotterGenerating() {
+    return document.body.classList.contains("potter-generating");
+  }
+
+  function shouldLoadingPenaltyEvasion() {
+    return loadingPenaltyEvasion && isPotterGenerating();
+  }
+
+  function isLoadingPenaltyHoverActive() {
+    return shouldLoadingPenaltyEvasion() && composerHoveredDuringLoading;
+  }
+
   function setSendHit(active) {
-    if (locked) return;
+    if (locked && !isLoadingPenaltyHoverActive()) return;
     sendHitActive = active;
     sendButton?.classList.toggle("is-cursor-hit", active);
     if (sendButton) {
       sendButton.style.backgroundColor = active ? "#ff0084" : "#000000";
-      sendButton.textContent = active ? "oops" : "Send";
+      if (!isPotterGenerating()) {
+        sendButton.textContent = active ? "oops" : "Send";
+      }
     }
   }
 
@@ -112,7 +177,7 @@ if (!composer || !input) {
   }
 
   function updateSendHitFromCursor() {
-    if (locked) return;
+    if (locked && !isLoadingPenaltyHoverActive()) return;
 
     if (isCursorInBounceRange()) {
       hitCursorX = mouseX;
@@ -141,53 +206,28 @@ if (!composer || !input) {
     updateSendHitFromCursor();
   }
 
-  function viewportWidth() {
-    return window.visualViewport?.width ?? document.documentElement.clientWidth;
-  }
-
-  function viewportHeight() {
-    return window.visualViewport?.height ?? document.documentElement.clientHeight;
-  }
-
-  function viewportOffsetX() {
-    return window.visualViewport?.offsetLeft ?? 0;
-  }
-
-  function viewportOffsetY() {
-    return window.visualViewport?.offsetTop ?? 0;
-  }
-
   function syncSize() {
-    const rect = composer.getBoundingClientRect();
-    sizeW = rect.width;
-    sizeH = rect.height;
-  }
-
-  /** Left wall = sideline. Right wall = viewport right edge. */
-  function getWalls() {
-    const sidelineRect = sideline
-      ? sideline.getBoundingClientRect()
-      : { right: 366, left: 365 };
-
-    const leftWall = sidelineRect.left;
-    const rightWall = viewportOffsetX() + viewportWidth();
-    const topWall = viewportOffsetY();
-    const bottomWall = viewportOffsetY() + viewportHeight();
-
-    return { leftWall, rightWall, topWall, bottomWall };
+    sizeW = composer.offsetWidth;
+    sizeH = composer.offsetHeight;
   }
 
   function getBounds() {
     syncSize();
-    const { leftWall, rightWall, topWall, bottomWall } = getWalls();
+    const laneW = composerLane?.clientWidth ?? 0;
+    const laneH = composerLane?.clientHeight ?? 0;
 
     return {
-      minX: leftWall,
-      maxX: Math.max(leftWall, rightWall - sizeW),
-      minY: topWall,
-      maxY: Math.max(topWall, bottomWall - sizeH),
-      laneWidth: Math.max(0, rightWall - leftWall),
+      minX: 0,
+      maxX: Math.max(0, laneW - sizeW),
+      minY: 0,
+      maxY: Math.max(0, laneH - sizeH),
+      laneWidth: laneW,
     };
+  }
+
+  function applyPos() {
+    composer.style.left = `${posX}px`;
+    composer.style.top = `${posY}px`;
   }
 
   function clamp(value, min, max) {
@@ -195,17 +235,11 @@ if (!composer || !input) {
   }
 
   function measureSize() {
-    const { laneWidth } = getBounds();
-    const travelRoom = Math.max(120, laneWidth * 0.32);
-    const composerMaxW = getComposerMaxW();
-    let targetW = Math.max(COMPOSER_MIN_W, Math.min(composerMaxW, laneWidth - travelRoom));
-    targetW = Math.min(targetW, laneWidth);
-
-    composer.style.width = `${targetW}px`;
-    composer.style.maxWidth = `${targetW}px`;
+    syncComposerWidth();
     syncSize();
 
-    if (sizeW > laneWidth && laneWidth > 0) {
+    const { laneWidth } = getBounds();
+    if (laneWidth > 0 && sizeW > laneWidth) {
       composer.style.width = `${laneWidth}px`;
       composer.style.maxWidth = `${laneWidth}px`;
       syncSize();
@@ -220,7 +254,7 @@ if (!composer || !input) {
     }
   }
 
-  /** Hard clamp: composer must stay fully inside sideline ↔ viewport right. */
+  /** Hard clamp: composer must stay fully inside the sideline-right lane. */
   function enforceVisible() {
     syncSize();
     const bounds = getBounds();
@@ -228,27 +262,7 @@ if (!composer || !input) {
     posX = clamp(posX, bounds.minX, bounds.maxX);
     posY = clamp(posY, bounds.minY, bounds.maxY);
 
-    composer.style.left = `${posX}px`;
-    composer.style.top = `${posY}px`;
-
-    const rect = composer.getBoundingClientRect();
-    const walls = getWalls();
-
-    if (rect.left < walls.leftWall) {
-      posX += walls.leftWall - rect.left;
-    }
-    if (rect.right > walls.rightWall) {
-      posX -= rect.right - walls.rightWall;
-    }
-    if (rect.top < walls.topWall) {
-      posY += walls.topWall - rect.top;
-    }
-    if (rect.bottom > walls.bottomWall) {
-      posY -= rect.bottom - walls.bottomWall;
-    }
-
-    composer.style.left = `${posX}px`;
-    composer.style.top = `${posY}px`;
+    applyPos();
     recordComposerCenter(composer);
   }
 
@@ -275,7 +289,7 @@ if (!composer || !input) {
   }
 
   function captureInitialPosition() {
-    composer.classList.add("chat-panel__composer--runaway");
+    mountComposerInLane();
     measureSize();
     const bounds = getBounds();
     posX = clamp((bounds.minX + bounds.maxX) / 2, bounds.minX, bounds.maxX);
@@ -303,7 +317,7 @@ if (!composer || !input) {
     for (const corner of corners) {
       const centerX = corner.x + sizeW / 2;
       const centerY = corner.y + sizeH / 2;
-      const dist = Math.hypot(centerX - mouseX, centerY - mouseY);
+      const dist = Math.hypot(centerX - mouseLaneX, centerY - mouseLaneY);
       if (dist > bestDist) {
         bestDist = dist;
         best = corner;
@@ -323,8 +337,8 @@ if (!composer || !input) {
     posX += (target.x - posX) * ESCAPE_GLIDE;
     posY += (target.y - posY) * ESCAPE_GLIDE;
 
-    let dx = targetCenterX - mouseX;
-    let dy = targetCenterY - mouseY;
+    let dx = targetCenterX - mouseLaneX;
+    let dy = targetCenterY - mouseLaneY;
     const dist = Math.hypot(dx, dy) || 1;
     const nx = dx / dist;
     const ny = dy / dist;
@@ -339,8 +353,8 @@ if (!composer || !input) {
   function placeAtCursor() {
     syncSize();
     const bounds = getBounds();
-    posX = clamp(mouseX - sizeW / 2, bounds.minX, bounds.maxX);
-    posY = clamp(mouseY - sizeH / 2, bounds.minY, bounds.maxY);
+    posX = clamp(mouseLaneX - sizeW / 2, bounds.minX, bounds.maxX);
+    posY = clamp(mouseLaneY - sizeH / 2, bounds.minY, bounds.maxY);
     enforceVisible();
   }
 
@@ -366,8 +380,8 @@ if (!composer || !input) {
 
     const cx = posX + sizeW / 2;
     const cy = posY + sizeH / 2;
-    let dx = cx - mouseX;
-    let dy = cy - mouseY;
+    let dx = cx - mouseLaneX;
+    let dy = cy - mouseLaneY;
     let dist = Math.hypot(dx, dy);
 
     if (dist < 0.001) return;
@@ -390,6 +404,84 @@ if (!composer || !input) {
     velY += Math.cos(t * 0.85 + posX * 0.003) * BOB_STRENGTH * 1.4;
   }
 
+  function bounceComposerFromLoadingHover() {
+    if (!shouldLoadingPenaltyEvasion() || loadingBounceAnimating) return;
+
+    mountComposerInLane();
+    measureSize();
+    syncPointerLane(mouseX, mouseY);
+    posX = composer.offsetLeft;
+    posY = composer.offsetTop;
+
+    const bounds = getBounds();
+    const target = getFarthestPosition();
+    const blend = 0.84 + Math.random() * 0.14;
+    const nextX = clamp(posX + (target.x - posX) * blend, bounds.minX, bounds.maxX);
+    const nextY = clamp(posY + (target.y - posY) * blend, bounds.minY, bounds.maxY);
+
+    composer.classList.remove("is-diagonal-nudge", "is-diagonal-nudge-doubt");
+    composer.classList.add("is-loading-penalty-evasion", "is-loading-penalty-bounce");
+    syncCatchPosition();
+    void composer.offsetWidth;
+
+    posX = nextX;
+    posY = nextY;
+    syncCatchPosition();
+    markSendHitFromBounce();
+    recordComposerCenter(composer);
+
+    loadingBounceAnimating = true;
+    window.clearTimeout(loadingBounceTimer);
+    loadingBounceTimer = window.setTimeout(() => {
+      loadingBounceAnimating = false;
+      composer.classList.remove("is-loading-penalty-bounce");
+      recordComposerCenter(composer);
+
+      if (
+        shouldLoadingPenaltyEvasion() &&
+        composer.matches(":hover") &&
+        isCursorInBounceRange()
+      ) {
+        bounceComposerFromLoadingHover();
+      }
+    }, LOADING_BOUNCE_MS);
+  }
+
+  function beginLoadingEvasionFromPointer(clientX, clientY) {
+    if (!shouldLoadingPenaltyEvasion()) return;
+
+    syncPointerLane(clientX, clientY);
+    composerHoveredDuringLoading = true;
+    bounceComposerFromLoadingHover();
+  }
+
+  function stopLoadingEvasionLoop() {
+    composerHoveredDuringLoading = false;
+    loadingBounceAnimating = false;
+    window.clearTimeout(loadingBounceTimer);
+    loadingBounceTimer = 0;
+    sendButton?.classList.remove("is-cursor-hit");
+    if (sendButton) {
+      sendButton.style.backgroundColor = "#000000";
+    }
+    sendHitActive = false;
+    cursorTouching = false;
+    composer.classList.remove(
+      "is-loading-penalty-evasion",
+      "is-loading-penalty-bounce",
+    );
+    if (locked) syncCatchPosition();
+  }
+
+  notifyPotterGenerationChange = function notifyPotterGenerationChangeImpl(active) {
+    if (document.body.dataset.character !== "Potter") return;
+
+    if (!active) {
+      loadingPenaltyEvasion = false;
+      stopLoadingEvasionLoop();
+    }
+  };
+
   function tick() {
     if (locked) return;
     if (
@@ -408,7 +500,7 @@ if (!composer || !input) {
 
     const cx = posX + sizeW / 2;
     const cy = posY + sizeH / 2;
-    const nearCursor = Math.hypot(cx - mouseX, cy - mouseY) < REPEL_RADIUS;
+    const nearCursor = Math.hypot(cx - mouseLaneX, cy - mouseLaneY) < REPEL_RADIUS;
     const drag = nearCursor ? ESCAPE_FRICTION : FRICTION;
 
     velX *= drag;
@@ -433,10 +525,23 @@ if (!composer || !input) {
     rafId = window.requestAnimationFrame(tick);
   }
 
+  function fleeFromPointer(clientX, clientY, { skipRejectHeadline = false } = {}) {
+    syncPointerLane(clientX, clientY);
+    markSendHitFromBounce();
+    cursorTouching = true;
+    if (!skipRejectHeadline) triggerRejectHeadline(headline);
+    fleeFromCursor();
+  }
+
   function nudgeFromPointer(clientX, clientY) {
+    if (shouldLoadingPenaltyEvasion()) {
+      composerHoveredDuringLoading = true;
+      beginLoadingEvasionFromPointer(clientX, clientY);
+      return;
+    }
+
     if (locked) return;
-    mouseX = clientX;
-    mouseY = clientY;
+    syncPointerLane(clientX, clientY);
 
     if (catchReady && isCursorInBounceRange()) {
       placeAtCursor();
@@ -444,10 +549,7 @@ if (!composer || !input) {
       return;
     }
 
-    markSendHitFromBounce();
-    cursorTouching = true;
-    triggerRejectHeadline(headline);
-    fleeFromCursor();
+    fleeFromPointer(clientX, clientY);
   }
 
   function enableCatch() {
@@ -469,6 +571,7 @@ if (!composer || !input) {
   }
 
   function syncCatchPosition(animate = false) {
+    enforceVisible();
     const catchX = posX;
     const catchY = posY;
     composer.style.setProperty("--catch-x", `${catchX}px`);
@@ -480,33 +583,38 @@ if (!composer || !input) {
     if (animate) composer.classList.add("is-diagonal-nudge");
   }
 
-  function nudgeComposerDiagonal() {
+  function nudgeComposerDiagonal(distanceScale = 1) {
     recordComposerCenter(composer);
     syncSize();
-    const rect = composer.getBoundingClientRect();
-    posX = rect.left;
-    posY = rect.top;
+    posX = composer.offsetLeft;
+    posY = composer.offsetTop;
     const bounds = getBounds();
     const angle = Math.random() * Math.PI * 2;
-    const dist = 220 + Math.random() * 260;
+    const dist = (220 + Math.random() * 260) * distanceScale;
     posX = clamp(posX + Math.cos(angle) * dist, bounds.minX, bounds.maxX);
     posY = clamp(posY + Math.sin(angle) * dist, bounds.minY, bounds.maxY);
 
+    if (distanceScale > 1) {
+      composer.classList.add("is-diagonal-nudge-doubt");
+    }
     syncCatchPosition(true);
+    const settleMs = distanceScale > 1 ? 680 : 520;
     window.setTimeout(() => {
-      composer.classList.remove("is-diagonal-nudge");
+      composer.classList.remove("is-diagonal-nudge", "is-diagonal-nudge-doubt");
       recordComposerCenter(composer);
-    }, 520);
+    }, settleMs);
   }
 
   function applyPenaltyStage1() {
     logInteraction("potter.penalty.stage1");
+    loadingPenaltyEvasion = true;
     setDoubtHeadline(headline);
-    nudgeComposerDiagonal();
+    nudgeComposerDiagonal(3);
   }
 
   function applyPenaltyStage2() {
     logInteraction("potter.penalty.stage2");
+    loadingPenaltyEvasion = true;
     setDistantHeadline(headline);
     nudgeComposerDiagonal();
   }
@@ -551,12 +659,12 @@ if (!composer || !input) {
       sendButton.textContent = "Send";
     }
 
+    mountComposerInLane();
     composer.classList.add("chat-panel__composer--runaway");
     measureSize();
     syncSize();
-    const rect = composer.getBoundingClientRect();
-    posX = rect.left;
-    posY = rect.top;
+    posX = composer.offsetLeft;
+    posY = composer.offsetTop;
     enforceVisible();
 
     const angle = Math.random() * Math.PI * 2;
@@ -618,7 +726,7 @@ if (!composer || !input) {
     if (!locked || penaltyRunawayActive) return { deferred: true };
 
     const score = scoreInput(message);
-    if (score > 3) return { deferred: false };
+    if (!isLowScore(score)) return { deferred: false };
 
     logInteraction("potter.penalty.low_score", { score, strikes: lowScoreStrikes });
 
@@ -686,6 +794,9 @@ if (!composer || !input) {
     activeMaxDodgeMs = INITIAL_MAX_DODGE_MS;
     catchReadyAt = Math.random() * activeMaxDodgeMs;
 
+    composer.classList.add("chat-panel__composer--runaway");
+    mountComposerInLane();
+
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         captureInitialPosition();
@@ -697,8 +808,16 @@ if (!composer || !input) {
     maxDodgeTimer = window.setTimeout(forceEndDodge, activeMaxDodgeMs);
 
     document.addEventListener("mousemove", (event) => {
-      mouseX = event.clientX;
-      mouseY = event.clientY;
+      syncPointerLane(event.clientX, event.clientY);
+      if (shouldLoadingPenaltyEvasion() && composer.matches(":hover")) {
+        composerHoveredDuringLoading = true;
+        if (isCursorInBounceRange() && !loadingBounceAnimating) {
+          bounceComposerFromLoadingHover();
+        } else {
+          updateSendHitFromCursor();
+        }
+        return;
+      }
       if (!locked) updateComposerCursorProximity();
     });
 
@@ -706,55 +825,66 @@ if (!composer || !input) {
       nudgeFromPointer(event.clientX, event.clientY);
     });
 
+    composer.addEventListener("mouseleave", () => {
+      composerHoveredDuringLoading = false;
+    });
+
     input.addEventListener("mousedown", (event) => {
+      if (shouldLoadingPenaltyEvasion()) {
+        event.preventDefault();
+        composerHoveredDuringLoading = true;
+        beginLoadingEvasionFromPointer(event.clientX, event.clientY);
+        return;
+      }
       if (locked) return;
       event.preventDefault();
       nudgeFromPointer(event.clientX, event.clientY);
     });
 
     input.addEventListener("focus", (event) => {
+      if (shouldLoadingPenaltyEvasion()) {
+        event.preventDefault();
+        input.blur();
+        composerHoveredDuringLoading = true;
+        beginLoadingEvasionFromPointer(mouseX, mouseY);
+        return;
+      }
       if (locked) return;
       event.preventDefault();
       input.blur();
       nudgeFromPointer(mouseX, mouseY);
     });
 
-    window.addEventListener("resize", () => {
-      if (penaltyRunawayActive || conversationEndRunawayActive) {
-        measureSize();
-        enforceVisible();
-        return;
-      }
-      if (locked || document.body.classList.contains("chat-started")) {
-        if (composer.classList.contains("is-catch-locked")) return;
-        enforceVisible();
-        return;
-      }
+    document.addEventListener("composer:resize", () => {
       measureSize();
       enforceVisible();
     });
+  }
 
-    window.visualViewport?.addEventListener("resize", () => {
-      if (penaltyRunawayActive || conversationEndRunawayActive) {
-        measureSize();
-        enforceVisible();
-        return;
-      }
-      if (locked || document.body.classList.contains("chat-started")) {
-        if (composer.classList.contains("is-catch-locked")) return;
-        enforceVisible();
-        return;
-      }
-      measureSize();
-      enforceVisible();
-    });
+  function scheduleRunawayBind() {
+    if (document.body.dataset.character !== "Potter") return;
+
+    const bootPending =
+      document.body.classList.contains("boot-active") ||
+      Boolean(document.getElementById("boot-screen"));
+
+    if (!bootPending) {
+      bindRunaway();
+      return;
+    }
+
+    document.addEventListener("boot:revealed", () => bindRunaway(), { once: true });
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", bindRunaway);
+    document.addEventListener("DOMContentLoaded", scheduleRunawayBind);
   } else {
-    bindRunaway();
+    scheduleRunawayBind();
   }
 }
 
-export { evaluateSubmittedMessage, startConversationEndRunaway };
+export {
+  evaluateSubmittedMessage,
+  startConversationEndRunaway,
+  notifyPotterGenerationChange,
+};

@@ -193,27 +193,34 @@ function heuristicEvaluateMessage(input: EvaluateMessageInput): AgentEvaluation 
     /\b(now|hurry|answer|tell me|why won't you)\b/i.test(message);
   const warm = /\b(thanks|thank you|please|sorry|hello|hi)\b/i.test(message);
 
-  let willingnessChange = lengthFactor * 0.015;
-  let fatigueChange = lengthFactor * 0.05 + input.state.turnCount * 0.008;
-  let interestChange = questionCount > 0 ? 0.02 : -0.005;
-  let distanceChange = 0.015;
+  let willingnessChange = lengthFactor * 0.008 - 0.02;
+  let fatigueChange = lengthFactor * 0.07 + input.state.turnCount * 0.012 + 0.03;
+  let interestChange = questionCount > 0 ? 0.01 : -0.03;
+  let distanceChange = 0.04;
 
   if (pushy) {
-    willingnessChange -= 0.18;
-    fatigueChange += 0.12;
-    distanceChange += 0.14;
+    willingnessChange -= 0.24;
+    fatigueChange += 0.16;
+    distanceChange += 0.18;
   }
 
   if (warm) {
-    willingnessChange += 0.04;
-    interestChange += 0.03;
-    distanceChange -= 0.04;
+    willingnessChange += 0.03;
+    interestChange += 0.02;
+    distanceChange -= 0.03;
   }
 
   if (message.length < 8) {
-    interestChange -= 0.06;
-    fatigueChange += 0.04;
-    willingnessChange -= 0.03;
+    interestChange -= 0.1;
+    fatigueChange += 0.07;
+    willingnessChange -= 0.06;
+    distanceChange += 0.05;
+  }
+
+  if (message.length < 16) {
+    interestChange -= 0.04;
+    fatigueChange += 0.03;
+    distanceChange += 0.03;
   }
 
   const nextWillingness = input.state.willingness + willingnessChange;
@@ -224,7 +231,7 @@ function heuristicEvaluateMessage(input: EvaluateMessageInput): AgentEvaluation 
     fatigueChange,
     interestChange,
     distanceChange,
-    conversationOpen: nextWillingness > 0.08 && nextFatigue < 0.95,
+    conversationOpen: nextWillingness > 0.12 && nextFatigue < 0.88,
   };
 }
 

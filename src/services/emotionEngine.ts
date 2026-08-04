@@ -204,6 +204,14 @@ export function updateEmotionDeterministic(
     trust += signal.apology * 10;
   }
 
+  // User asks the character to calm down — lower intensity and anger pressure.
+  if (signal.deescalation > 0) {
+    intensity -= signal.deescalation * 42;
+    angerMomentum -= signal.deescalation * 24;
+    resentment -= signal.deescalation * 18;
+    trust += signal.deescalation * 6 + signal.friendliness * 4;
+  }
+
   // 8. Neutral input slowly returns toward baseline.
   if (signal.trigger === "neutral") {
     const decay = 0.05 * angerDecayScale(angerMomentum);
@@ -235,19 +243,27 @@ export function updateEmotionDeterministic(
 
   mood = resolveMood(state, signal, angerMomentum, resentment, happinessGain);
 
-  if (mood === "angry" && intensity < 45) {
+  const deescalated = signal.deescalation >= 0.25;
+
+  if (mood === "angry" && intensity < 45 && !deescalated) {
     intensity = 45;
   }
 
-  if (mood === "happy" && intensity < BASELINE.intensity + 20) {
+  if (mood === "happy" && intensity < BASELINE.intensity + 20 && !deescalated) {
     intensity = BASELINE.intensity + 20;
   }
 
-  if (mood === "sad" && intensity < BASELINE.intensity + 15) {
+  if (mood === "sad" && intensity < BASELINE.intensity + 15 && !deescalated) {
     intensity = BASELINE.intensity + 15;
   }
 
-  const persistence = applyMoodPersistence(state, mood, intensity);
+  const persistence = applyMoodPersistence(
+    signal.deescalation >= 0.35 && signal.trigger === "deescalation"
+      ? { ...state, moodStreak: 0 }
+      : state,
+    mood,
+    intensity,
+  );
 
   return clampEmotionState({
     mood,

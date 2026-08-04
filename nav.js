@@ -19,7 +19,7 @@ function syncActiveCharacter(name) {
 syncActiveCharacter(activeCharacter);
 
 characterButtons.forEach((button) => {
-  button.addEventListener("dblclick", () => {
+  button.addEventListener("click", () => {
     const href = button.dataset.href;
     if (!href || button.classList.contains("is-active")) return;
     syncActiveCharacter(button.dataset.name);

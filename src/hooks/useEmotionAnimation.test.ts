@@ -3,6 +3,7 @@ import { test, expect } from "bun:test";
 import { getEmotionVisualConfig } from "../config/emotionVisualConfig.ts";
 import {
   computeEmotionAnimationParams,
+  computeHappyWaveRandomness,
   EMOTION_ANIMATION_BOUNDS,
 } from "./useEmotionAnimation.ts";
 
@@ -59,4 +60,24 @@ test("groggy speed grows less with intensity than happy or angry", () => {
   expect(groggy.speed).toBeLessThan(happy.speed);
   expect(groggy.speed).toBeLessThan(angry.speed);
   expect(groggy.amplitude).toBeGreaterThan(50);
+});
+
+test("happy wave randomness ramps with intensity", () => {
+  const low = computeHappyWaveRandomness(0);
+  const high = computeHappyWaveRandomness(100);
+  const happyLow = computeEmotionAnimationParams(
+    { mood: "happy", intensity: 0 },
+    getEmotionVisualConfig({ mood: "happy", intensity: 0 }),
+  );
+  const happyHigh = computeEmotionAnimationParams(
+    { mood: "happy", intensity: 100 },
+    getEmotionVisualConfig({ mood: "happy", intensity: 100 }),
+  );
+
+  expect(low.irregularity).toBeCloseTo(0.02, 5);
+  expect(low.jitter).toBe(0);
+  expect(high.irregularity).toBeCloseTo(0.82, 5);
+  expect(high.jitter).toBeCloseTo(0.52, 5);
+  expect(happyHigh.irregularity).toBeGreaterThan(happyLow.irregularity * 4);
+  expect(happyHigh.jitter).toBeGreaterThan(happyLow.jitter);
 });

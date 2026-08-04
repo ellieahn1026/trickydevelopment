@@ -13,8 +13,10 @@
     />
     <link rel="stylesheet" href="./orbit-kr.css" />
     <link rel="stylesheet" href="./styles.css" />
+    
   </head>
   <body data-character="Rupin">
+    
     <div class="screen">
       <div class="stage">
         <svg class="composer-trail" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
@@ -22,7 +24,7 @@
         </svg>
         
         <header class="brand">
-          <a href="./index.html"><h1>hackedGPT</h1></a>
+          <a href="./index.html?boot"><h1>hackedGPT</h1></a>
         </header>
 
         <nav class="characters" aria-label="Characters">
@@ -87,7 +89,7 @@
               aria-label="Open F1 chat"
             >
               <span class="character__swatch" style="--swatch: #ff670f; --swatch-active: #ff670f; --swatch-hover: #ea5600">
-                <img class="character__icon character__icon--default" src="./assets/icons/tom.svg" alt="" width="97" height="97" decoding="async" />
+                <img class="character__icon character__icon--default" src="./assets/icons/f1.svg" alt="" width="97" height="97" decoding="async" />
               </span>
               <span class="character__label">F1</span>
             </a>
@@ -128,9 +130,11 @@
       </div>
     </div>
 
+    <script type="module" src="./composer-layout.js"></script>
     <script type="module" src="./nav.js"></script>
     <script type="module" src="./user-badge.js"></script>
     <script type="module" src="./runaway-input.js"></script>
     <script type="module" src="./chat.js"></script>
+    
   </body>
 </html>

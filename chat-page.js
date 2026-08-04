@@ -1,4 +1,5 @@
 const BTN_SIZE = 97;
+const BOOT_ENTRY_HREF = "./index.html?boot";
 
 const CHARACTERS = [
   {
@@ -32,7 +33,7 @@ const CHARACTERS = [
       color: "#ff670f",
       colorActive: "#ff670f",
       colorHover: "#ea5600",
-      icon: "./assets/icons/tom.svg",
+      icon: "./assets/icons/f1.svg",
     },
   },
 ];
@@ -87,6 +88,90 @@ function characterButtons(activeName) {
   }).join("");
 }
 
+function bootScreenMarkup() {
+  return `
+    <div id="boot-screen" class="boot-screen" aria-hidden="true">
+      <div class="boot-fake">
+        <header class="brand boot-fake__piece">
+          <h1>hackedGPT</h1>
+        </header>
+        <nav class="boot-fake__sidebar" aria-label="Chat shortcuts">
+          <div class="boot-fake__menu-item boot-fake__menu-item--active boot-fake__piece">
+            <img class="boot-fake__menu-icon" src="./assets/icons/ic_start1.svg" alt="" width="45" height="45" decoding="async" />
+            <span class="boot-fake__menu-label">New chat</span>
+          </div>
+          <div class="boot-fake__menu-item boot-fake__piece">
+            <img class="boot-fake__menu-icon" src="./assets/icons/ic_start2.svg" alt="" width="45" height="45" decoding="async" />
+            <span class="boot-fake__menu-label">Why</span>
+          </div>
+          <div class="boot-fake__menu-item boot-fake__piece">
+            <img class="boot-fake__menu-icon" src="./assets/icons/ic_start3.svg" alt="" width="45" height="45" decoding="async" />
+            <span class="boot-fake__menu-label">do you believe</span>
+          </div>
+          <div class="boot-fake__menu-item boot-fake__piece">
+            <img class="boot-fake__menu-icon" src="./assets/icons/ic_start4.svg" alt="" width="45" height="45" decoding="async" />
+            <span class="boot-fake__menu-label">GPT all the time?</span>
+          </div>
+        </nav>
+        <div class="boot-fake__center boot-fake__piece boot-fake__piece--centered">
+          <h2 class="boot-fake__headline">Where should we begin?</h2>
+          <div class="boot-fake__composer-wrap">
+            <button
+              type="button"
+              class="boot-fake__composer-trigger"
+              id="boot-composer-trigger"
+              aria-label="Ask ChatGPT"
+            >
+              <span class="boot-fake__composer">
+                <span class="boot-fake__composer-input">Ask ChatGPT</span>
+                <span class="boot-fake__composer-actions" aria-hidden="true">
+                  <img
+                    class="boot-fake__composer-mic"
+                    src="./assets/icons/boot-composer-mic.png"
+                    alt=""
+                    width="22"
+                    height="28"
+                    decoding="async"
+                    aria-hidden="true"
+                  />
+                  <span class="boot-fake__composer-send">
+                    <img
+                      class="boot-fake__composer-send-icon"
+                      src="./assets/icons/boot-composer-arrow.png"
+                      alt=""
+                      width="24"
+                      height="26"
+                      decoding="async"
+                    />
+                  </span>
+                </span>
+              </span>
+            </button>
+          </div>
+        </div>
+        <div class="sideline boot-fake__piece" aria-hidden="true"></div>
+        <div class="user-badge-zone boot-fake__piece" aria-label="User profile">
+          <div class="user-badge__rule" aria-hidden="true"></div>
+          <div class="user-badge">
+            <span class="user-badge__avatar" aria-hidden="true">
+              <span class="user-badge__initial">E</span>
+            </span>
+            <span class="user-badge__name">Ellie</span>
+          </div>
+        </div>
+      </div>
+      <div class="boot-bsod" aria-hidden="true">
+        <p class="boot-bsod__title">:(</p>
+        <p class="boot-bsod__body">
+          A problem has been detected and Windows has been shut down to prevent damage to your computer.<br /><br />
+          HACKED_GPT_BOOT_FAILURE<br /><br />
+          If this is the first time you've seen this error screen, restart your session.
+        </p>
+        <p class="boot-bsod__code">Stop: 0x000000H4CK (0x00000000, 0x00000000, 0x00000000, 0x00000000)</p>
+      </div>
+    </div>`;
+}
+
 function chatPage({
   activeName,
   title,
@@ -95,6 +180,8 @@ function chatPage({
   sendLabel = "Send",
   sendClass = "",
 }) {
+  const isPotterEntry = activeName === "Potter";
+
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -110,8 +197,11 @@ function chatPage({
     />
     <link rel="stylesheet" href="./orbit-kr.css" />
     <link rel="stylesheet" href="./styles.css" />
+    ${isPotterEntry ? `<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <link rel="stylesheet" href="./boot-screen.css" />` : ""}
   </head>
-  <body data-character="${activeName}">
+  <body data-character="${activeName}"${isPotterEntry ? ` class="boot-active"` : ""}>
+    ${isPotterEntry ? bootScreenMarkup() : ""}
     <div class="screen">
       <div class="stage">
         <svg class="composer-trail" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
@@ -123,7 +213,7 @@ function chatPage({
             : ""
         }
         <header class="brand">
-          <a href="./index.html"><h1>hackedGPT</h1></a>
+          <a href="${BOOT_ENTRY_HREF}"><h1>hackedGPT</h1></a>
         </header>
 
         <nav class="characters" aria-label="Characters">
@@ -164,10 +254,12 @@ function chatPage({
       </div>
     </div>
 
+    <script type="module" src="./composer-layout.js"></script>
     <script type="module" src="./nav.js"></script>
     <script type="module" src="./user-badge.js"></script>
     <script type="module" src="./runaway-input.js"></script>
     <script type="module" src="./chat.js"></script>
+    ${isPotterEntry ? `<script type="module" src="./boot-screen.js"></script>` : ""}
   </body>
 </html>`;
 }

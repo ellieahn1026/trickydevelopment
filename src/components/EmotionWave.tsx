@@ -4,11 +4,17 @@ import { getMoodVisualConfig, getWaveAnswerTextStyle } from "../config/emotionVi
 import { useEmotionAnimation } from "../hooks/useEmotionAnimation.ts";
 import type { EmotionAnimationParams } from "../hooks/useEmotionAnimation.ts";
 import {
+  buildWaveAnswerFont,
+  computeAnswerTextFontSize,
   computeAnswerTextScrollMultiplier,
   computeGroggyLetterSpacing,
+  computeScrollSpeedVariance,
   drawTextAlongWave,
   WAVE_ANSWER_FONT,
+  WAVE_ANSWER_FONT_MAX_SCALE,
+  WAVE_ANSWER_FONT_SIZE,
 } from "../lib/wavePathText.ts";
+import { computeHappyEdmAmplitudeFactor } from "../lib/happyEdmBeat.ts";
 import type { EmotionState, Mood } from "../types/emotion.ts";
 
 type EmotionWaveProps = {
@@ -225,6 +231,25 @@ export function resolveLegacyWaveAmplitude(
   return lerp(minAmp, legacyMaxAmp, normalizedIntensity) * amplitudeMultiplier;
 }
 
+/** Slow amplitude envelope — same sine period in X, only peak height changes. */
+export function computeWaveHeightEnvelope(
+  normalizedX: number,
+  irregularity: number,
+  timeSeconds = 0,
+): number {
+  if (irregularity <= 0.001) {
+    return 1;
+  }
+
+  const phase = timeSeconds * Math.PI * 2;
+  const slowA = Math.sin(normalizedX * Math.PI * 2.2 + phase * 0.12 + 0.6);
+  const slowB = Math.sin(normalizedX * Math.PI * 1.05 + phase * 0.08 + 1.9);
+  const slowC = Math.cos(normalizedX * Math.PI * 3.1 + phase * 0.05 + 2.4);
+  const mix = slowA * 0.45 + slowB * 0.35 + slowC * 0.2;
+
+  return 1 + irregularity * mix * 0.9;
+}
+
 export function sampleCompositeWave(
   x: number,
   width: number,
@@ -234,12 +259,35 @@ export function sampleCompositeWave(
 ): number {
   const { amplitude, speed, frequency } = context;
   const phase = timeSeconds * speed * Math.PI * 2;
-  const baseK = (Math.PI * 2 * frequency) / Math.max(width, 1);
+  const baseK =
+    (Math.PI * 2 * resolveWaveFrequency(frequency)) / Math.max(width, 1);
   const flowOffset = timeSeconds * speed * WAVE_FLOW_SPEED;
   const traveledX = x - flowOffset;
+  const nx = traveledX / Math.max(width, 1);
+  const envelope = computeWaveHeightEnvelope(
+    nx,
+    context.irregularity,
+    timeSeconds,
+  );
 
-  return centerY + amplitude * Math.sin(traveledX * baseK + phase);
+  return (
+    centerY +
+    amplitude * envelope * Math.sin(traveledX * baseK + phase)
+  );
 }
+
+/** Horizontal wavelength scale for sine paths (4 = 4× nominal wavelength). */
+export const WAVE_WAVELENGTH_SCALE = 4;
+
+/** @deprecated Use WAVE_WAVELENGTH_SCALE */
+export const TEXT_WAVE_WAVELENGTH_SCALE = WAVE_WAVELENGTH_SCALE;
+
+export function resolveWaveFrequency(frequency: number): number {
+  return frequency / WAVE_WAVELENGTH_SCALE;
+}
+
+/** @deprecated Use resolveWaveFrequency */
+export const resolveTextWaveFrequency = resolveWaveFrequency;
 
 /** Static sine path for text — scroll drives motion; shape stays fixed for even spacing and speed. */
 export function sampleTextWaveY(
@@ -249,10 +297,13 @@ export function sampleTextWaveY(
   _timeSeconds: number,
   context: WaveSampleContext,
 ): number {
-  const { amplitude, frequency } = context;
-  const baseK = (Math.PI * 2 * frequency) / Math.max(width, 1);
+  const { amplitude, frequency, irregularity } = context;
+  const baseK =
+    (Math.PI * 2 * resolveWaveFrequency(frequency)) / Math.max(width, 1);
+  const nx = x / Math.max(width, 1);
+  const envelope = computeWaveHeightEnvelope(nx, irregularity, 0);
 
-  return centerY + amplitude * Math.sin(x * baseK);
+  return centerY + amplitude * envelope * Math.sin(x * baseK);
 }
 
 function drawWaveFrame(
@@ -271,6 +322,21 @@ function drawWaveFrame(
     const textStyle = getWaveAnswerTextStyle(context.mood);
 
     const moodWave = getMoodVisualConfig(context.mood).wave;
+    const moodScrollBaseline = moodWave.textScrollSpeedMultiplier ?? 1;
+    const scrollSpeedMultiplier = computeAnswerTextScrollMultiplier(
+      context.mood,
+      context.intensity,
+      moodScrollBaseline,
+    );
+    const fontSize = computeAnswerTextFontSize(
+      scrollSpeedMultiplier,
+      moodScrollBaseline,
+      context.mood,
+    );
+    const scrollSpeedVariance = computeScrollSpeedVariance(
+      context.intensity,
+      context.mood,
+    );
 
     drawTextAlongWave(ctx, answerText, {
       width,
@@ -278,14 +344,13 @@ function drawWaveFrame(
       centerY,
       sampleY: (x) =>
         sampleTextWaveY(x, width, centerY, timeSeconds, context),
-      font: WAVE_ANSWER_FONT,
+      font: buildWaveAnswerFont(fontSize),
       fillStyle: textStyle.fillStyle,
       scrollElapsedSeconds: answerElapsedSeconds,
-      scrollSpeedMultiplier: computeAnswerTextScrollMultiplier(
-        context.mood,
-        context.intensity,
-        moodWave.textScrollSpeedMultiplier ?? 1,
-      ),
+      scrollSpeedMultiplier,
+      scrollSpeedVariance,
+      mood: context.mood,
+      intensity: context.intensity,
       letterSpacing:
         context.mood === "groggy"
           ? computeGroggyLetterSpacing(context.intensity)
@@ -413,6 +478,8 @@ export function EmotionWave({
         deltaSeconds,
       );
 
+      const timeSeconds = (now - startTime) / 1000;
+
       const renderContext: WaveSampleContext = {
         ...currentAnimationRef.current,
         mood: moodRef.current,
@@ -423,9 +490,15 @@ export function EmotionWave({
         ),
       };
 
+      if (moodRef.current === "happy") {
+        renderContext.amplitude *= computeHappyEdmAmplitudeFactor(
+          timeSeconds,
+          currentAnimationRef.current.intensity,
+        );
+      }
+
       const centerY = resolveWaveCenterY(canvas, height);
 
-      const timeSeconds = (now - startTime) / 1000;
       const answerElapsedSeconds =
         (now - answerScrollStartRef.current) / 1000;
       drawWaveFrame(
@@ -443,6 +516,9 @@ export function EmotionWave({
 
     applyResize();
     void document.fonts.load(WAVE_ANSWER_FONT);
+    void document.fonts.load(
+      buildWaveAnswerFont(WAVE_ANSWER_FONT_SIZE * WAVE_ANSWER_FONT_MAX_SCALE),
+    );
     void document.fonts.load('400 18px "Arimo"', "가힣");
 
     const hostObserver = new ResizeObserver(scheduleResize);

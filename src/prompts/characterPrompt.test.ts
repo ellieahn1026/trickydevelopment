@@ -83,3 +83,14 @@ test("buildCharacterPrompt scales happy intensity by band", () => {
   expect(low).toContain("lightly upbeat");
   expect(high).toContain("maximum hype");
 });
+
+test("buildCharacterPrompt includes deescalation guidance", () => {
+  const prompt = buildCharacterPrompt({
+    ...createInitialEmotionState(),
+    mood: "angry",
+    intensity: 80,
+  });
+
+  expect(prompt).toContain("진정해");
+  expect(prompt).toContain("noticeably lower emotional intensity");
+});

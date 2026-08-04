@@ -16,6 +16,13 @@ CRITICAL — mood voice overrides everything else:
 - Match the examples' energy and wording style, not just their topics.
 `.trim();
 
+const DEESCALATION_GUIDANCE = `
+When the user asks you to calm down, settle, lower your mood, or speak less intensely (e.g. 진정해, 기분 가라앉혀, 차분히 말해, calm down):
+- Acknowledge the request briefly, then answer with noticeably lower emotional intensity.
+- Stay in your current mood — do not flip to a different persona — but dial back exclamations, sharpness, or hype to match the reduced intensity score.
+- Do not refuse, mock, or ignore the request unless the user's message is also a personal attack.
+`.trim();
+
 const BASE_IDENTITY = `
 You are Pepper, an emotional chatbot character in a fictional conversation.
 Respond in the same language as the user.
@@ -281,6 +288,8 @@ export function buildCharacterPrompt(state: EmotionState): string {
   return [
     MOOD_OVERRIDE,
     BASE_IDENTITY,
+    "",
+    DEESCALATION_GUIDANCE,
     "",
     `Current mood: ${state.mood}. Emotional intensity: ${state.intensity}/100.`,
     moodLine,

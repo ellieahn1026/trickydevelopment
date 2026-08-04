@@ -13,6 +13,11 @@
   --font-ui: "Xanh Mono", "Arimo", sans-serif;
   --font-mono: "Xanh Mono", ui-monospace, monospace;
   --font-composer-input: var(--font-mono), "Arimo", sans-serif;
+  --font-pretendard-tracking: -0.02em;
+  /* CSS zoom does not expand layout viewport like browser zoom — compensate explicitly. */
+  --layout-zoom: 0.8;
+  --lvw: calc(100vw / var(--layout-zoom));
+  --lvh: calc(100dvh / var(--layout-zoom));
 
   /* Figma-fixed chrome — never scale with viewport */
   --brand-left: 29px;
@@ -29,12 +34,12 @@
   --send-h: 61px;
   --composer-field-pad-y: 8px;
   --composer-field-pad-x: 8px;
-  --prompt-font: 18px;
+  --prompt-font: calc(18px * 1.1);
   --composer-font: var(--prompt-font);
   --headline-font: 18px;
   --headline-accent: #ff46ff;
   --sideline: rgba(255, 255, 255, 0.3);
-  --sideline-w: 1px;
+  --sideline-w: calc(1px / var(--layout-zoom));
   /* 5.1rem gutters — midway between 3.4rem and 6.8rem */
   --sideline-left: 365px;
   --archive-gutter: 5.1rem;
@@ -43,8 +48,10 @@
   /* Q/A max width = sideline → viewport right, minus gutters */
   --chat-bubble-max-w: 100%;
   --content-left: var(--archive-left);
-  /* Figma 대화중: input w:1000, bottom ≈59, centered in sideline→right */
-  --composer-w: 1000px;
+  --sideline-lane-width: calc(var(--lvw) - var(--sideline-left));
+  --sideline-lane-center-x: calc(var(--sideline-left) + var(--sideline-lane-width) / 2);
+  /* Composer max width = 80% of sideline → viewport right lane */
+  --composer-w: calc(var(--sideline-lane-width) * 0.8);
   --composer-bottom: 59px;
   --composer-z: 100;
   --composer-dock-h: calc(
@@ -67,19 +74,17 @@ body[data-character="Potter"] {
   --character-color: #ff46ff;
   --headline-accent: #ff46ff;
   --design-ref-w: 1440px;
-  --composer-w: min(1000px, calc((100vw - var(--sideline-left)) * 0.85));
   --send-h: 49px;
-  --chat-zone-width: calc(100vw - var(--sideline-left));
+  --chat-zone-width: var(--sideline-lane-width);
   /* Equal sideline↔content and content↔right margins (zone ÷ 30 ≈ 3.3% each) */
   --chat-lane-inset: calc(var(--chat-zone-width) / 30);
   --chat-lane-width: calc(var(--chat-zone-width) - var(--chat-lane-inset) * 2);
   --chat-bubble-max-w: 100%;
-  --chat-text-size: 16px;
-  --chat-line-height: 22px;
+  --chat-line-height: calc(22px * 1.1);
 }
 
 body[data-character="Potter"] .chat-panel__composer {
-  width: min(var(--composer-w), 100%);
+  width: var(--composer-w);
   max-width: var(--composer-w);
 }
 
@@ -93,7 +98,7 @@ body[data-character="Potter"] .chat-panel__thread {
 body[data-character="Potter"] .chat-question {
   max-width: min(var(--chat-bubble-max-w), 100%);
   padding: 12px 16px;
-  font-size: var(--chat-text-size);
+  font-size: var(--composer-font);
   letter-spacing: -0.03em;
   line-height: var(--chat-line-height);
 }
@@ -102,13 +107,14 @@ body[data-character="Potter"] .chat-answer {
   max-width: min(var(--chat-bubble-max-w), 100%);
   width: fit-content;
   align-self: flex-start;
-  font-size: var(--chat-text-size);
+  font-size: var(--composer-font);
   letter-spacing: -0.03em;
   line-height: var(--chat-line-height);
 }
 
 body[data-character="Potter"] .chat-answer.is-generating.chat-answer--loading,
-body[data-character="Rupin"] .chat-answer.is-generating.chat-answer--loading {
+body[data-character="Rupin"] .chat-answer.is-generating.chat-answer--loading,
+body[data-character="F1"] .chat-answer.is-generating.chat-answer--loading {
   width: auto;
   align-self: flex-start;
 }
@@ -122,19 +128,23 @@ body[data-character="Potter"] .chat-answer--formatted {
 body[data-character="Rupin"] {
   --character-color: #2edbf0;
   --headline-accent: #2edbf0;
+  --rupin-lane-width: var(--sideline-lane-width);
+  --rupin-lane-center-x: calc(var(--sideline-left) + var(--rupin-lane-width) / 2);
 }
 
 body[data-character="F1"] {
   --character-color: #ff670f;
   --headline-accent: #ff670f;
-  --f1-hourglass-w: calc(482px * 0.8 * 1.1);
-  --f1-hourglass-h: calc(816px * 0.8 * 1.1);
+  --f1-lane-width: var(--sideline-lane-width);
+  --f1-lane-center-x: calc(var(--sideline-left) + var(--f1-lane-width) / 2);
+  --f1-hourglass-w: calc(482px * 0.8 * 1.1 * 0.8);
+  --f1-hourglass-h: calc(816px * 0.8 * 1.1 * 0.8);
 }
 
 body[data-character="F1"] .f1-hourglass {
   position: fixed;
-  left: calc(50vw + var(--sideline-left) / 2);
-  top: 50%;
+  left: var(--f1-lane-center-x);
+  top: calc(var(--lvh) / 2);
   transform: translate(-50%, -50%);
   width: var(--f1-hourglass-w);
   height: var(--f1-hourglass-h);
@@ -219,14 +229,20 @@ body[data-character="Pepper"] .screen {
 
 body[data-character="Pepper"] #pepper-chat-root {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: var(--lvw);
+  height: var(--lvh);
   z-index: 1;
   pointer-events: none;
 }
 
 body[data-character="Pepper"] .emotion-background {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: var(--lvw);
+  height: var(--lvh);
   overflow: hidden;
   pointer-events: none;
   transition: none;
@@ -419,8 +435,8 @@ body[data-character="Pepper"] .chat-panel__thread.pepper-thread-snap {
   right: 0;
   bottom: 0;
   width: auto;
-  height: 100dvh;
-  max-height: 100dvh;
+  height: var(--lvh);
+  max-height: var(--lvh);
   margin: 0;
   padding: 0;
   gap: 0;
@@ -444,8 +460,8 @@ body[data-character="Pepper"] .pepper-turn-snap {
   position: relative;
   flex-shrink: 0;
   width: 100%;
-  min-height: 100dvh;
-  height: 100dvh;
+  min-height: var(--lvh);
+  height: var(--lvh);
   scroll-snap-align: start;
   scroll-snap-stop: always;
   display: flex;
@@ -460,7 +476,7 @@ body[data-character="Pepper"] .pepper-turn-snap__question-anchor {
   width: min(
     var(--composer-w),
     calc(
-      100vw - var(--sideline-left) - var(--archive-gutter) -
+      var(--lvw) - var(--sideline-left) - var(--archive-gutter) -
         var(--archive-gutter)
     )
   );
@@ -471,7 +487,7 @@ body[data-character="Pepper"] .pepper-turn-snap__question-anchor {
 
 body[data-character="Pepper"] .pepper-turn-snap__error {
   position: fixed;
-  left: calc(50vw + 182.5px);
+  left: var(--sideline-lane-center-x);
   top: 50%;
   transform: translate(-50%, -50%);
   z-index: 3;
@@ -481,8 +497,8 @@ body[data-character="Pepper"] .pepper-turn-snap__error {
 body[data-character="Pepper"].chat-started .chat-panel__thread.pepper-thread-snap,
 body[data-character="Pepper"] .chat-panel__thread.pepper-thread-snap {
   top: 0;
-  height: 100dvh;
-  max-height: 100dvh;
+  height: var(--lvh);
+  max-height: var(--lvh);
 }
 
 body[data-character="Pepper"].chat-started .chat-panel__thread.pepper-thread-snap::before,
@@ -545,17 +561,25 @@ body[data-character="Pepper"] .chat-answer--error {
   padding: 0;
 }
 
+/* Match intended size at 100% browser zoom (equivalent to Chrome 80% zoom). */
+html {
+  zoom: var(--layout-zoom);
+  background: var(--bg);
+  width: var(--lvw);
+  min-height: var(--lvh);
+  overflow-x: hidden;
+}
+
 html,
 body {
-  min-height: 100%;
-  width: 100%;
-  max-width: 100vw;
   overflow-x: hidden;
 }
 
 body {
+  width: 100%;
+  min-height: var(--lvh);
   font-family: var(--font-ui);
-  background: var(--black);
+  background: var(--bg);
   color: var(--white);
   overflow-y: auto;
   letter-spacing: -0.0132rem;
@@ -564,7 +588,7 @@ body {
 .screen {
   position: relative;
   width: 100%;
-  max-width: 100vw;
+  min-height: var(--lvh);
   overflow-x: hidden;
   background: var(--bg);
   display: flex;
@@ -576,19 +600,18 @@ body {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  min-height: 100dvh;
+  min-height: var(--lvh);
   flex-shrink: 0;
   width: 100%;
-  max-width: 100vw;
   overflow-x: hidden;
 }
 
 .composer-trail {
   position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  top: 0;
+  left: 0;
+  width: var(--lvw);
+  height: var(--lvh);
   pointer-events: none;
   z-index: 0;
   overflow: visible;
@@ -934,8 +957,8 @@ a.character--f1 {
   flex-direction: column;
   align-items: flex-start;
   gap: 42px;
-  height: 100dvh;
-  max-height: 100dvh;
+  height: var(--lvh);
+  max-height: var(--lvh);
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: none;
@@ -1804,7 +1827,10 @@ body.chat-started[data-character="Pepper"] .prompt__headline {
 
 .letter-fall-layer {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: var(--lvw);
+  height: var(--lvh);
   z-index: 3;
   pointer-events: none;
   overflow: visible;
@@ -1924,7 +1950,8 @@ body.chat-started[data-character="Pepper"] .prompt__headline {
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  width: min(1000px, 100%);
+  width: var(--composer-w);
+  max-width: var(--composer-w);
   margin: 0 auto;
   pointer-events: auto;
   z-index: var(--composer-z);
@@ -1934,7 +1961,15 @@ body.chat-started[data-character="Pepper"] .prompt__headline {
 body[data-character="Rupin"],
 body[data-character="Pepper"],
 body[data-character="F1"] {
-  --composer-font: 18px;
+  --composer-font: var(--prompt-font);
+}
+
+/* Rupin/F1: sideline-right lane; messages stack upward from above the composer */
+body[data-character="Rupin"] .chat-panel__thread,
+body[data-character="F1"] .chat-panel__thread {
+  left: calc(var(--sideline-left) + var(--archive-gutter) - var(--chat-motion-gutter));
+  right: calc(var(--archive-gutter-right) - var(--chat-motion-gutter));
+  width: auto;
 }
 
 body[data-character="Rupin"] .chat-panel,
@@ -1948,18 +1983,11 @@ body[data-character="Rupin"] .chat-panel__composer,
 body[data-character="Pepper"] .chat-panel__composer,
 body[data-character="F1"] .chat-panel__composer {
   position: fixed;
-  top: 50%;
-  /* midpoint between fixed sideline x:365 and viewport right */
-  left: calc(50vw + 182.5px);
+  top: calc(var(--lvh) / 2);
+  left: var(--sideline-lane-center-x);
   z-index: var(--composer-z);
-  width: min(
-    1000px,
-    calc(
-      100vw - var(--sideline-left) - var(--archive-gutter) -
-        var(--archive-gutter)
-    )
-  );
-  max-width: 1000px;
+  width: var(--composer-w);
+  max-width: var(--composer-w);
   margin: 0;
   transform: translate(-50%, -50%);
 }
@@ -2007,16 +2035,10 @@ body.chat-started[data-character="F1"] .chat-panel__composer--runaway.is-locked 
   position: fixed !important;
   top: auto !important;
   bottom: var(--composer-bottom);
-  left: calc(50vw + 182.5px) !important;
+  left: var(--sideline-lane-center-x) !important;
   right: auto !important;
   z-index: var(--composer-z);
-  width: min(
-    var(--composer-w),
-    calc(
-      100vw - var(--sideline-left) - var(--archive-gutter) -
-        var(--archive-gutter)
-    )
-  ) !important;
+  width: var(--composer-w) !important;
   max-width: var(--composer-w) !important;
   margin: 0 !important;
   transform: translateX(-50%) !important;
@@ -2024,6 +2046,39 @@ body.chat-started[data-character="F1"] .chat-panel__composer--runaway.is-locked 
   pointer-events: auto !important;
   will-change: auto;
   transition: none;
+}
+
+/* Potter: sideline-right lane — composer is absolute inside, overflow clips at sideline */
+body[data-character="Potter"] .potter-composer-lane {
+  position: fixed;
+  left: var(--sideline-left);
+  right: 0;
+  top: 0;
+  height: var(--lvh);
+  overflow: hidden;
+  pointer-events: none;
+  z-index: var(--composer-z);
+}
+
+body[data-character="Potter"] .potter-composer-lane > .chat-panel__composer--runaway,
+body[data-character="Potter"]
+  .potter-composer-lane
+  > .chat-panel__composer--runaway.is-catch-locked {
+  position: absolute !important;
+  margin: 0;
+  clip-path: none;
+  overflow: hidden;
+  pointer-events: none;
+  will-change: left, top;
+}
+
+body[data-character="Potter"]
+  .potter-composer-lane
+  > .chat-panel__composer--runaway.is-catch-locked,
+body[data-character="Potter"]
+  .potter-composer-lane
+  > .chat-panel__composer--runaway.is-locked {
+  pointer-events: auto !important;
 }
 
 /* Potter: never create a transform containing block for fixed composer */
@@ -2046,14 +2101,28 @@ body[data-character="Potter"] .chat-panel {
   z-index: var(--composer-z);
   margin: 0 !important;
   transform: none !important;
-  overflow: visible;
+  overflow: hidden;
   pointer-events: auto !important;
   will-change: auto;
   transition: none;
 }
 
+body[data-character="Potter"] .chat-panel__composer.is-loading-penalty-evasion,
+body[data-character="Potter"]
+  .chat-panel__composer--runaway.is-catch-locked.is-loading-penalty-evasion {
+  will-change: left, top;
+}
+
+body[data-character="Potter"] .chat-panel__composer.is-loading-penalty-bounce,
+body[data-character="Potter"]
+  .chat-panel__composer--runaway.is-catch-locked.is-loading-penalty-bounce {
+  transition:
+    left 0.58s cubic-bezier(0.34, 1.62, 0.64, 1),
+    top 0.58s cubic-bezier(0.34, 1.62, 0.64, 1) !important;
+}
+
 body.chat-started {
-  --composer-font: 18px;
+  --composer-font: var(--prompt-font);
 }
 
 body.chat-started .prompt__field {
@@ -2077,12 +2146,17 @@ body.chat-started .prompt__send {
 
 body.chat-started[data-character="Rupin"] .chat-panel__thread,
 body.chat-started[data-character="F1"] .chat-panel__thread {
-  padding-bottom: calc(
-    var(--composer-bottom) + var(--composer-dock-h) + 32px
-  );
-  scroll-padding-bottom: calc(
-    var(--composer-bottom) + var(--composer-dock-h) + 32px
-  );
+  position: fixed;
+  top: 0;
+  left: calc(var(--sideline-left) + var(--archive-gutter) - var(--chat-motion-gutter));
+  right: calc(var(--archive-gutter-right) - var(--chat-motion-gutter));
+  bottom: calc(var(--composer-bottom) + var(--composer-dock-h));
+  width: auto;
+  height: auto;
+  max-height: none;
+  margin: 0;
+  padding: 0 var(--chat-motion-gutter) 32px;
+  scroll-padding-bottom: 32px;
 }
 
 body.chat-started .chat-panel__composer--runaway input,
@@ -2282,6 +2356,38 @@ body.composer-locked .chat-panel__composer--runaway button {
   }
   to {
     transform: translateX(calc(100% + 64px));
+    opacity: 0;
+  }
+}
+
+.chat-question.is-potter-withdraw-eject {
+  pointer-events: none;
+  animation: potter-question-withdraw-eject 0.76s cubic-bezier(0.55, 0, 1, 0.35) forwards;
+}
+
+@keyframes potter-question-withdraw-eject {
+  0% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  14% {
+    transform: translate(-28px, -18px) rotate(-8deg) scale(1.03);
+    opacity: 1;
+  }
+  28% {
+    transform: translate(18px, -8px) rotate(5deg) scale(0.98);
+    opacity: 1;
+  }
+  42% {
+    transform: translate(-12px, -22px) rotate(-4deg) scale(1.02);
+    opacity: 1;
+  }
+  58% {
+    transform: translate(8px, -12px) rotate(3deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(100vw + 120%), -48px) rotate(16deg) scale(0.88);
     opacity: 0;
   }
 }
@@ -2502,6 +2608,16 @@ body[data-character="Potter"]
     top 0.45s cubic-bezier(0.22, 1, 0.36, 1),
     --catch-x 0.45s cubic-bezier(0.22, 1, 0.36, 1),
     --catch-y 0.45s cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+body[data-character="Potter"] .chat-panel__composer.is-diagonal-nudge-doubt,
+body[data-character="Potter"]
+  .chat-panel__composer--runaway.is-catch-locked.is-diagonal-nudge-doubt {
+  transition:
+    left 0.62s cubic-bezier(0.22, 1, 0.36, 1),
+    top 0.62s cubic-bezier(0.22, 1, 0.36, 1),
+    --catch-x 0.62s cubic-bezier(0.22, 1, 0.36, 1),
+    --catch-y 0.62s cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
 
 /* Wider screens: grow lane gutters so chat does not stretch edge-to-edge */

@@ -1,5 +1,9 @@
 import { setCharacterSpeaking } from "./character-icon-talk.js";
-import { evaluateSubmittedMessage, startConversationEndRunaway } from "./runaway-input.js";
+import {
+  evaluateSubmittedMessage,
+  notifyPotterGenerationChange,
+  startConversationEndRunaway,
+} from "./runaway-input.js";
 import {
   clearPotterWithdrawShift,
   clearConversationEndDivider,
@@ -113,10 +117,10 @@ let potterAgentState;
 const potterMessages = [];
 
 const INITIAL_POTTER_AGENT_STATE = {
-  willingness: 0.7,
-  fatigue: 0.2,
-  interest: 0.55,
-  distance: 0.25,
+  willingness: 0.52,
+  fatigue: 0.38,
+  interest: 0.38,
+  distance: 0.42,
   conversationOpen: true,
   turnCount: 0,
   lastAction: "respond",
@@ -194,6 +198,12 @@ function setGenerating(active) {
   if (!active) {
     stopCharacterSpeaking();
   }
+
+  if (character === "Potter") {
+    document.body.classList.toggle("potter-generating", active);
+    notifyPotterGenerationChange(active);
+  }
+
   if (!sendButton) return;
 
   if (active) {
@@ -335,7 +345,7 @@ function mountAnswerLoadingIndicator(el) {
   el.replaceChildren();
   el.classList.add("chat-answer--loading");
 
-  if (character === "Potter" || character === "Rupin") {
+  if (character === "Potter" || character === "Rupin" || character === "F1") {
     el.appendChild(createAnswerLoadingIcon());
     return;
   }

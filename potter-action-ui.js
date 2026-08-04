@@ -7,6 +7,7 @@ const HESITATE_PREFIX = "hmm...";
 const HESITATE_DURATION_MS = 5000;
 const QUESTION_DISMISS_MS = 420;
 const QUESTION_SILENCE_EJECT_MS = 580;
+const QUESTION_WITHDRAW_EJECT_MS = 760;
 const SHORT_GRAVITY = 3400;
 const SHORT_DROP_START = -180;
 
@@ -90,6 +91,36 @@ function ejectQuestion(questionEl, isCancelled) {
 
     questionEl.addEventListener("animationend", settle);
     window.setTimeout(settle, QUESTION_SILENCE_EJECT_MS + 80);
+  });
+}
+
+function ejectQuestionWithdraw(questionEl, isCancelled) {
+  return new Promise((resolve, reject) => {
+    if (!questionEl?.isConnected) {
+      resolve();
+      return;
+    }
+
+    logInteraction("potter.question.withdraw_eject");
+
+    questionEl.classList.add("is-potter-withdraw-eject");
+
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      questionEl.removeEventListener("animationend", settle);
+      questionEl.remove();
+
+      if (isCancelled?.()) {
+        reject(new DOMException("Aborted", "AbortError"));
+        return;
+      }
+      resolve();
+    };
+
+    questionEl.addEventListener("animationend", settle);
+    window.setTimeout(settle, QUESTION_WITHDRAW_EJECT_MS + 80);
   });
 }
 
@@ -180,7 +211,7 @@ async function renderHesitate(el, text, isCancelled, onScroll, renderText) {
 }
 
 async function renderWithdraw(el, questionEl, text, isCancelled, onScroll) {
-  await dismissQuestion(questionEl, isCancelled);
+  await ejectQuestionWithdraw(questionEl, isCancelled);
 
   el.className = "chat-answer chat-answer--withdraw";
   el.textContent = text.trim() || WITHDRAW_LABEL;

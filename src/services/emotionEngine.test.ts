@@ -44,6 +44,25 @@ test("apology reduces anger without snapping to happy", () => {
   expect(next.mood).not.toBe("happy");
 });
 
+test("deescalation request lowers intensity for angry mood", () => {
+  const angry = updateEmotionDeterministic(groggyInitialState(), {
+    ...DEFAULT_EMOTION_ANALYSIS,
+    personalAttack: 0.95,
+    trigger: "attack",
+  });
+
+  const next = updateEmotionDeterministic(angry, {
+    ...DEFAULT_EMOTION_ANALYSIS,
+    deescalation: 0.9,
+    friendliness: 0.4,
+    trigger: "deescalation",
+  });
+
+  expect(next.mood).toBe("angry");
+  expect(next.intensity).toBeLessThan(angry.intensity - 20);
+  expect(next.angerMomentum).toBeLessThan(angry.angerMomentum);
+});
+
 test("deterministic updates are stable", () => {
   const state = groggyInitialState();
   const signal = {

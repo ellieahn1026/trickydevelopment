@@ -9,6 +9,7 @@ export const TriggerSchema = z.enum([
   "criticism",
   "insult",
   "attack",
+  "deescalation",
   "neutral",
 ]);
 
@@ -22,6 +23,7 @@ export const EmotionAnalysisSchema = z.object({
   personalAttack: z.number().min(0).max(1),
   affection: z.number().min(0).max(1),
   apology: z.number().min(0).max(1),
+  deescalation: z.number().min(0).max(1),
   trigger: TriggerSchema,
 });
 
@@ -35,6 +37,7 @@ export const DEFAULT_EMOTION_ANALYSIS: EmotionAnalysis = {
   personalAttack: 0,
   affection: 0,
   apology: 0,
+  deescalation: 0,
   trigger: "neutral",
 };
 
