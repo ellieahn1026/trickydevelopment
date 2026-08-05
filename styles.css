@@ -52,7 +52,7 @@
   --sideline-lane-center-x: 50vw;
   --composer-w: 80vw;
   --composer-bottom: 59px;
-  --composer-z: 100;
+  --composer-z: 200;
   --composer-dock-h: calc(
     31px + 12px + var(--send-h) + var(--composer-field-pad-y) * 2
   );
@@ -138,6 +138,8 @@ body[data-character="F1"] {
   --f1-lane-center-x: calc(var(--sideline-left) + var(--f1-lane-width) / 2);
   --f1-hourglass-w: calc(482px * 0.8 * 1.1 * 0.8);
   --f1-hourglass-h: calc(816px * 0.8 * 1.1 * 0.8);
+  --f1-hourglass-z: 0;
+  --f1-ui-z: 10;
 }
 
 body[data-character="F1"] .f1-hourglass {
@@ -147,7 +149,7 @@ body[data-character="F1"] .f1-hourglass {
   transform: translate(-50%, -50%);
   width: var(--f1-hourglass-w);
   height: var(--f1-hourglass-h);
-  z-index: 1;
+  z-index: var(--f1-hourglass-z, 0);
   pointer-events: none;
   user-select: none;
   overflow: visible;
@@ -228,20 +230,14 @@ body[data-character="Pepper"] .screen {
 
 body[data-character="Pepper"] #pepper-chat-root {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: var(--lvw);
-  height: var(--lvh);
+  inset: 0;
   z-index: 1;
   pointer-events: none;
 }
 
 body[data-character="Pepper"] .emotion-background {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: var(--lvw);
-  height: var(--lvh);
+  inset: 0;
   overflow: hidden;
   pointer-events: none;
   transition: none;
@@ -1954,6 +1950,13 @@ body.chat-started[data-character="Pepper"] .prompt__headline {
   margin: 0 auto;
   pointer-events: auto;
   z-index: var(--composer-z);
+  isolation: isolate;
+}
+
+.chat-panel__composer .prompt__headline,
+.chat-panel__composer .prompt__form {
+  position: relative;
+  z-index: 1;
 }
 
 /* Rupin/Pepper first screen: centered in the sideline → viewport lane */
@@ -1969,6 +1972,7 @@ body[data-character="F1"] .chat-panel__thread {
   left: calc(var(--sideline-left) + var(--archive-gutter) - var(--chat-motion-gutter));
   right: calc(var(--archive-gutter-right) - var(--chat-motion-gutter));
   width: auto;
+  z-index: 40;
 }
 
 body[data-character="Rupin"] .chat-panel,
@@ -1976,6 +1980,11 @@ body[data-character="Pepper"] .chat-panel,
 body[data-character="F1"] .chat-panel {
   animation: none;
   transform: none;
+}
+
+body[data-character="F1"] .chat-panel {
+  position: relative;
+  z-index: var(--f1-ui-z, 10);
 }
 
 body[data-character="Rupin"] .chat-panel__composer,

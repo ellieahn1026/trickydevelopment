@@ -1,4 +1,7 @@
 import hourglassFrameSrc from "./assets/icons/icon_hourglass.svg";
+import { publicAssetUrl } from "./asset-url.js";
+
+const hourglassFrameUrl = publicAssetUrl(hourglassFrameSrc);
 
 const VIEW_W = 483;
 const VIEW_H = 816;
@@ -203,7 +206,7 @@ export function initF1Hourglass(container) {
     <div class="f1-hourglass__rotor" style="--f1-hourglass-rotation: 0deg">
       <img
         class="f1-hourglass__frame"
-        src="${hourglassFrameSrc}"
+        src="${hourglassFrameUrl}"
         alt=""
         width="${VIEW_W}"
         height="${VIEW_H}"

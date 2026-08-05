@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 
 import { Chat } from "./components/Chat.tsx";
+import "../layout-engine.js";
 
 const rootElement = document.getElementById("pepper-chat-root");
 

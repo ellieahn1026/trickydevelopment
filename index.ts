@@ -148,6 +148,19 @@ const routes = {
     },
 } as const;
 
+async function serveStaticAsset(pathname: string) {
+  if (!pathname.startsWith("/assets/")) return null;
+
+  const file = Bun.file(`.${pathname}`);
+  if (!(await file.exists())) return null;
+
+  return new Response(file, {
+    headers: {
+      "Cache-Control": "public, max-age=31536000, immutable",
+    },
+  });
+}
+
 function isAddressInUse(error: unknown): boolean {
   return (
     typeof error === "object" &&
@@ -167,6 +180,11 @@ for (let attempt = 0; attempt < maxPortAttempts; attempt += 1) {
       port,
       hostname: "0.0.0.0",
       routes,
+      async fetch(req) {
+        const asset = await serveStaticAsset(new URL(req.url).pathname);
+        if (asset) return asset;
+        return new Response("Not Found", { status: 404 });
+      },
       development: {
         hmr: true,
         console: true,

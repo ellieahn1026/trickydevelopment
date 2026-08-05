@@ -15,10 +15,7 @@ type EmotionBackgroundProps = {
 };
 
 const BACKGROUND_STYLE = {
-  position: "fixed",
-  inset: 0,
   zIndex: 0,
-  overflow: "hidden",
 } as const;
 
 export function EmotionBackground({
