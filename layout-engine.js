@@ -128,9 +128,18 @@ function bindLayoutEngine() {
     document.dispatchEvent(new CustomEvent("layout:refresh"));
   };
 
+  let viewportSyncRaf = 0;
+  const scheduleViewportSync = () => {
+    if (viewportSyncRaf) return;
+    viewportSyncRaf = requestAnimationFrame(() => {
+      viewportSyncRaf = 0;
+      sync();
+    });
+  };
+
   window.addEventListener("resize", sync);
-  window.visualViewport?.addEventListener("resize", sync);
-  window.visualViewport?.addEventListener("scroll", sync);
+  window.visualViewport?.addEventListener("resize", scheduleViewportSync);
+  window.visualViewport?.addEventListener("scroll", scheduleViewportSync);
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", sync, { once: true });

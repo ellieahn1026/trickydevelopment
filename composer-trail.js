@@ -1,4 +1,7 @@
+import { clientToLayoutLocal } from "./layout-engine.js";
+
 const pathEl = document.querySelector(".composer-trail__path");
+const trailEl = pathEl?.closest(".composer-trail") ?? null;
 const points = [];
 let lastX = null;
 let lastY = null;
@@ -48,8 +51,9 @@ function recordComposerCenter(composer) {
   if (document.body.dataset.character !== "Potter") return;
 
   const rect = composer.getBoundingClientRect();
-  const x = rect.left + rect.width / 2;
-  const y = rect.top + rect.height / 2;
+  const clientX = rect.left + rect.width / 2;
+  const clientY = rect.top + rect.height / 2;
+  const { x, y } = clientToLayoutLocal(trailEl, clientX, clientY);
 
   if (
     lastX != null &&
