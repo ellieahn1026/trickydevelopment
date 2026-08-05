@@ -6,7 +6,7 @@
   "scripts": {
     "build:chat": "bun build ./chat.entry.js --outdir=. --entry-naming=\"chat.js\" --target=browser --minify --asset-naming=\"assets/[name]-[hash].[ext]\"",
     "build:pepper": "bun build ./src/pepper-main.tsx --outdir=. --entry-naming=\"pepper.js\" --target=browser --minify --asset-naming=\"assets/[name]-[hash].[ext]\"",
-    "build:web": "bun run build:chat && bun run build:pepper",
+    "build:web": "bun generate-pages.js && bun run build:chat && bun run build:pepper",
     "dev": "bun --hot ./index.ts",
     "start": "bun ./index.ts",
     "agent:chat": "bun ./src/index.ts",

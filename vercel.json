@@ -10,6 +10,10 @@
     {
       "source": "/chat",
       "destination": "/api/pepper-chat"
+    },
+    {
+      "source": "/favicon.ico",
+      "destination": "/assets/icons/fabicon.ico"
     }
   ],
   "functions": {
