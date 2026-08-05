@@ -1,12 +1,28 @@
-import { clientToLayoutLocal } from "./layout-engine.js";
+import { getLayoutMetrics } from "./layout-engine.js";
 
-const pathEl = document.querySelector(".composer-trail__path");
-const trailEl = pathEl?.closest(".composer-trail") ?? null;
 const points = [];
 let lastX = null;
 let lastY = null;
 
 const MIN_DIST_PX = 10;
+
+function getPathEl() {
+  return document.querySelector(".composer-trail__path");
+}
+
+/** Visual viewport client coords → layout px (same space as --lvw / .composer-trail SVG). */
+function clientToTrailLocal(clientX, clientY) {
+  const { lvw, lvh, zoom } = getLayoutMetrics();
+  const html = document.documentElement;
+  const rect = html.getBoundingClientRect();
+  const scaleX = rect.width > 0 ? lvw / rect.width : 1 / zoom;
+  const scaleY = rect.height > 0 ? lvh / rect.height : 1 / zoom;
+
+  return {
+    x: (clientX - rect.left) * scaleX,
+    y: (clientY - rect.top) * scaleY,
+  };
+}
 
 function pointsToSmoothPath(curvePoints) {
   if (curvePoints.length < 2) return "";
@@ -36,6 +52,7 @@ function pointsToSmoothPath(curvePoints) {
 }
 
 function redrawTrail() {
+  const pathEl = getPathEl();
   if (!pathEl) return;
 
   if (points.length < 2) {
@@ -47,13 +64,14 @@ function redrawTrail() {
 }
 
 function recordComposerCenter(composer) {
+  const pathEl = getPathEl();
   if (!pathEl || !composer) return;
   if (document.body.dataset.character !== "Potter") return;
 
   const rect = composer.getBoundingClientRect();
   const clientX = rect.left + rect.width / 2;
   const clientY = rect.top + rect.height / 2;
-  const { x, y } = clientToLayoutLocal(trailEl, clientX, clientY);
+  const { x, y } = clientToTrailLocal(clientX, clientY);
 
   if (
     lastX != null &&
