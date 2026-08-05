@@ -1,5 +1,13 @@
-import { chatPage, pepperPage } from "./chat-page.js";
+import { chatPage, pepperPage, setSiteOrigin } from "./chat-page.js";
 import { writeFileSync } from "node:fs";
+
+const siteOrigin = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+  : process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : process.env.SITE_ORIGIN;
+
+setSiteOrigin(siteOrigin);
 
 const DEFAULT_HEADLINE = "You want to talk with me? Follow.";
 

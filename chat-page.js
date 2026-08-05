@@ -1,6 +1,50 @@
 const BTN_SIZE = 97;
 const BOOT_ENTRY_HREF = "./index.html?boot";
 
+const DEFAULT_SITE_ORIGIN = "https://trickydevelopment.vercel.app";
+const OG_IMAGE_PATH = "/assets/icons/opengraph.png";
+const OG_IMAGE_WIDTH = 1200;
+const OG_IMAGE_HEIGHT = 630;
+const OG_TITLE = "hackedGPT";
+const OG_DESCRIPTION = "No choice. Trust GPT";
+
+let siteOrigin = DEFAULT_SITE_ORIGIN;
+
+function setSiteOrigin(origin) {
+  if (origin) siteOrigin = origin.replace(/\/$/, "");
+}
+
+function escapeHtml(value) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function ogMetaTags({ path = "/" } = {}) {
+  const url = `${siteOrigin}${path}`;
+  const image = `${siteOrigin}${OG_IMAGE_PATH}`;
+  const safeTitle = escapeHtml(OG_TITLE);
+  const safeDescription = escapeHtml(OG_DESCRIPTION);
+
+  return `
+    <meta name="description" content="${safeDescription}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="hackedGPT" />
+    <meta property="og:title" content="${safeTitle}" />
+    <meta property="og:description" content="${safeDescription}" />
+    <meta property="og:url" content="${url}" />
+    <meta property="og:image" content="${image}" />
+    <meta property="og:image:width" content="${OG_IMAGE_WIDTH}" />
+    <meta property="og:image:height" content="${OG_IMAGE_HEIGHT}" />
+    <meta property="og:image:alt" content="hackedGPT" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${safeTitle}" />
+    <meta name="twitter:description" content="${safeDescription}" />
+    <meta name="twitter:image" content="${image}" />`;
+}
+
 const FAVICON_LINKS = `
     <link rel="icon" href="./assets/icons/fabicon.ico" sizes="any" />
     <link rel="icon" type="image/png" href="./assets/icons/fabicon.png" />`;
@@ -191,7 +235,9 @@ function chatPage({
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${title}</title>${FAVICON_LINKS}
+    <title>${title}</title>${FAVICON_LINKS}${ogMetaTags({
+      path: activeName === "Potter" ? "/" : `/${activeName.toLowerCase()}`,
+    })}
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
@@ -273,7 +319,9 @@ function pepperPage() {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PepperGPT — hackedGPT</title>${FAVICON_LINKS}
+    <title>PepperGPT — hackedGPT</title>${FAVICON_LINKS}${ogMetaTags({
+      path: "/pepper",
+    })}
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
@@ -322,4 +370,4 @@ function pepperPage() {
 </html>`;
 }
 
-export { chatPage, pepperPage };
+export { chatPage, pepperPage, setSiteOrigin };
