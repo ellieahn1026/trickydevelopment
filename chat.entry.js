@@ -47,6 +47,7 @@ import {
 } from "./lib/rupin-fallback.ts";
 import potterLoadingIcon from "./assets/icons/potter-loading.svg";
 import { publicAssetUrl } from "./asset-url.js";
+import { DEFAULT_HEADLINE, stopHeadlineTyping } from "./headline-type.js";
 
 const character = document.body.dataset.character || "Potter";
 const isF1 = character === "F1";
@@ -231,12 +232,14 @@ function clearGenerationTimers() {
 }
 
 function setThinkingHeadline() {
-  headline.classList.remove("is-wave", "is-typing");
+  stopHeadlineTyping(headline);
+  headline.classList.remove("is-wave");
   headline.textContent = THINKING_HEADLINE;
 }
 
 function restoreHeadlineAfterGeneration() {
-  headline.classList.remove("is-wave", "is-typing");
+  stopHeadlineTyping(headline);
+  headline.classList.remove("is-wave");
   headline.textContent = dockedHeadlines[character] || DEFAULT_HEADLINE;
 }
 

@@ -7,11 +7,12 @@ import {
   setConversationEndHeadline,
 } from "./headline-type.js";
 import { isLowScore, scoreInput } from "./input-score.js";
-import { recordComposerCenter } from "./composer-trail.js";
+import { recordTrailPoint } from "./composer-trail.js";
 import { logInteraction } from "./interaction-log.js";
 import {
   clientToLayoutLocal,
   elementLayoutSize,
+  getLayoutMetrics,
   refreshLayout,
   syncComposerWidth,
   targetComposerWidthPx,
@@ -229,6 +230,20 @@ if (!composer || !input) {
     composer.style.top = `${posY}px`;
   }
 
+  /** Stable viewport-layout center — avoids getBoundingClientRect jitter under html zoom. */
+  function composerCenterInViewportLayout() {
+    const { sidelineLeft } = getLayoutMetrics();
+    return {
+      x: sidelineLeft + posX + sizeW / 2,
+      y: posY + sizeH / 2,
+    };
+  }
+
+  function recordComposerTrail() {
+    const center = composerCenterInViewportLayout();
+    recordTrailPoint(center.x, center.y);
+  }
+
   function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
   }
@@ -259,7 +274,7 @@ if (!composer || !input) {
     posY = clamp(posY, bounds.minY, bounds.maxY);
 
     applyPos();
-    recordComposerCenter(composer);
+    recordComposerTrail();
   }
 
   function containInBounds() {
@@ -424,14 +439,14 @@ if (!composer || !input) {
     posY = nextY;
     syncCatchPosition();
     markSendHitFromBounce();
-    recordComposerCenter(composer);
+    recordComposerTrail();
 
     loadingBounceAnimating = true;
     window.clearTimeout(loadingBounceTimer);
     loadingBounceTimer = window.setTimeout(() => {
       loadingBounceAnimating = false;
       composer.classList.remove("is-loading-penalty-bounce");
-      recordComposerCenter(composer);
+      recordComposerTrail();
 
       if (
         shouldLoadingPenaltyEvasion() &&
@@ -580,7 +595,7 @@ if (!composer || !input) {
   }
 
   function nudgeComposerDiagonal(distanceScale = 1) {
-    recordComposerCenter(composer);
+    recordComposerTrail();
     syncSize();
     posX = composer.offsetLeft;
     posY = composer.offsetTop;
@@ -597,7 +612,7 @@ if (!composer || !input) {
     const settleMs = distanceScale > 1 ? 680 : 520;
     window.setTimeout(() => {
       composer.classList.remove("is-diagonal-nudge", "is-diagonal-nudge-doubt");
-      recordComposerCenter(composer);
+      recordComposerTrail();
     }, settleMs);
   }
 
@@ -750,7 +765,7 @@ if (!composer || !input) {
     placeAtCursor();
     enforceVisible();
     syncCatchPosition();
-    recordComposerCenter(composer);
+    recordComposerTrail();
     composer.classList.add("is-locked", "is-catch-locked");
 
     sendButton?.classList.remove("is-cursor-hit");

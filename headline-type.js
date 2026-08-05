@@ -45,8 +45,8 @@ function typeHeadline(element, text, speed = TYPE_SPEED_MS) {
 
   let index = 0;
   typingTimer = window.setInterval(() => {
-    element.textContent += text[index];
     index += 1;
+    element.textContent = text.slice(0, index);
 
     if (index >= text.length) {
       window.clearInterval(typingTimer);
@@ -54,6 +54,11 @@ function typeHeadline(element, text, speed = TYPE_SPEED_MS) {
       element.classList.remove("is-typing");
     }
   }, speed);
+}
+
+function stopHeadlineTyping(element) {
+  clearHeadlineTimers();
+  element?.classList.remove("is-typing");
 }
 
 function initHeadline(element) {
@@ -119,6 +124,7 @@ export {
   initHeadline,
   triggerRejectHeadline,
   typeLockHeadline,
+  stopHeadlineTyping,
   setDoubtHeadline,
   setDistantHeadline,
   setConversationEndHeadline,

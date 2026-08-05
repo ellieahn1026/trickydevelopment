@@ -6,6 +6,10 @@ let lastY = null;
 
 const MIN_DIST_PX = 10;
 
+function getTrailEl() {
+  return document.querySelector(".composer-trail");
+}
+
 function getPathEl() {
   return document.querySelector(".composer-trail__path");
 }
@@ -13,8 +17,8 @@ function getPathEl() {
 /** Visual viewport client coords → layout px (same space as --lvw / .composer-trail SVG). */
 function clientToTrailLocal(clientX, clientY) {
   const { lvw, lvh, zoom } = getLayoutMetrics();
-  const html = document.documentElement;
-  const rect = html.getBoundingClientRect();
+  const refEl = getTrailEl() ?? document.documentElement;
+  const rect = refEl.getBoundingClientRect();
   const scaleX = rect.width > 0 ? lvw / rect.width : 1 / zoom;
   const scaleY = rect.height > 0 ? lvh / rect.height : 1 / zoom;
 
@@ -22,6 +26,25 @@ function clientToTrailLocal(clientX, clientY) {
     x: (clientX - rect.left) * scaleX,
     y: (clientY - rect.top) * scaleY,
   };
+}
+
+function recordTrailPoint(x, y) {
+  const pathEl = getPathEl();
+  if (!pathEl) return;
+  if (document.body.dataset.character !== "Potter") return;
+
+  if (
+    lastX != null &&
+    lastY != null &&
+    Math.hypot(x - lastX, y - lastY) < MIN_DIST_PX
+  ) {
+    return;
+  }
+
+  lastX = x;
+  lastY = y;
+  points.push({ x, y });
+  redrawTrail();
 }
 
 function pointsToSmoothPath(curvePoints) {
@@ -64,27 +87,13 @@ function redrawTrail() {
 }
 
 function recordComposerCenter(composer) {
-  const pathEl = getPathEl();
-  if (!pathEl || !composer) return;
-  if (document.body.dataset.character !== "Potter") return;
+  if (!composer) return;
 
   const rect = composer.getBoundingClientRect();
   const clientX = rect.left + rect.width / 2;
   const clientY = rect.top + rect.height / 2;
   const { x, y } = clientToTrailLocal(clientX, clientY);
-
-  if (
-    lastX != null &&
-    lastY != null &&
-    Math.hypot(x - lastX, y - lastY) < MIN_DIST_PX
-  ) {
-    return;
-  }
-
-  lastX = x;
-  lastY = y;
-  points.push({ x, y });
-  redrawTrail();
+  recordTrailPoint(x, y);
 }
 
-export { recordComposerCenter };
+export { recordComposerCenter, recordTrailPoint };

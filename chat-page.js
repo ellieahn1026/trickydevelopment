@@ -261,7 +261,6 @@ function chatPage({
     <script type="module" src="./composer-layout.js"></script>
     <script type="module" src="./nav.js"></script>
     <script type="module" src="./user-badge.js"></script>
-    <script type="module" src="./runaway-input.js"></script>
     <script type="module" src="./chat.js"></script>
     ${isPotterEntry ? `<script type="module" src="./boot-screen.js"></script>` : ""}
   </body>
