@@ -236,7 +236,7 @@ function chatPage({
           <div class="chat-panel__thread" id="chat-thread" aria-live="polite"></div>
           <div class="chat-panel__composer" id="chat-composer">
             <p class="prompt__headline" id="chat-headline" data-default-headline="${headline}">${headline}</p>
-            <form class="prompt__form" id="chat-form">
+            <form class="prompt__form" id="chat-form" onsubmit="event.preventDefault()">
               <div class="prompt__field">
                 <input
                   type="text"

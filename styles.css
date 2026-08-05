@@ -2052,12 +2052,14 @@ body.chat-started[data-character="F1"] .chat-panel__composer--runaway.is-locked 
 body[data-character="Potter"] .potter-composer-lane {
   position: fixed;
   left: var(--sideline-left);
-  right: 0;
+  width: var(--sideline-lane-width);
+  right: auto;
   top: 0;
   height: var(--lvh);
   overflow: hidden;
   pointer-events: none;
   z-index: var(--composer-z);
+  box-sizing: border-box;
 }
 
 body[data-character="Potter"] .potter-composer-lane > .chat-panel__composer--runaway,
@@ -2065,11 +2067,14 @@ body[data-character="Potter"]
   .potter-composer-lane
   > .chat-panel__composer--runaway.is-catch-locked {
   position: absolute !important;
+  width: var(--composer-w) !important;
+  max-width: var(--composer-w) !important;
   margin: 0;
   clip-path: none;
   overflow: hidden;
   pointer-events: none;
   will-change: left, top;
+  box-sizing: border-box;
 }
 
 body[data-character="Potter"]

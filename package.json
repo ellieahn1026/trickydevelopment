@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "build:web": "bun build ./chat.js --outdir=. --target=browser --minify --asset-naming=\"assets/[name]-[hash].[ext]\"",
     "dev": "bun --hot ./index.ts",
     "start": "bun ./index.ts",
     "agent:chat": "bun ./src/index.ts",

@@ -9,7 +9,11 @@ import {
 import { isLowScore, scoreInput } from "./input-score.js";
 import { recordComposerCenter } from "./composer-trail.js";
 import { logInteraction } from "./interaction-log.js";
-import { syncComposerWidth } from "./composer-layout.js";
+import {
+  layoutRectSize,
+  layoutZoom,
+  syncComposerWidth,
+} from "./composer-layout.js";
 
 const CURSOR_RADIUS = 58;
 const REPEL_RADIUS = 248;
@@ -78,11 +82,6 @@ if (!composer || !input) {
   let composerLane = null;
   let mouseLaneX = -9999;
   let mouseLaneY = -9999;
-
-  function layoutZoom() {
-    const z = parseFloat(getComputedStyle(document.documentElement).zoom);
-    return Number.isFinite(z) && z > 0 ? z : 1;
-  }
 
   function ensureComposerLane() {
     if (composerLane?.isConnected) return composerLane;
@@ -207,14 +206,16 @@ if (!composer || !input) {
   }
 
   function syncSize() {
-    sizeW = composer.offsetWidth;
-    sizeH = composer.offsetHeight;
+    const size = layoutRectSize(composer);
+    sizeW = size.width;
+    sizeH = size.height;
   }
 
   function getBounds() {
     syncSize();
-    const laneW = composerLane?.clientWidth ?? 0;
-    const laneH = composerLane?.clientHeight ?? 0;
+    const laneSize = layoutRectSize(composerLane);
+    const laneW = laneSize.width;
+    const laneH = laneSize.height;
 
     return {
       minX: 0,
@@ -237,13 +238,6 @@ if (!composer || !input) {
   function measureSize() {
     syncComposerWidth();
     syncSize();
-
-    const { laneWidth } = getBounds();
-    if (laneWidth > 0 && sizeW > laneWidth) {
-      composer.style.width = `${laneWidth}px`;
-      composer.style.maxWidth = `${laneWidth}px`;
-      syncSize();
-    }
   }
 
   function limitSpeed() {
