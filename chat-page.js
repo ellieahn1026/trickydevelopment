@@ -314,7 +314,7 @@ function pepperPage() {
     <script type="module" src="./composer-layout.js"></script>
     <script type="module" src="./nav.js"></script>
     <script type="module" src="./user-badge.js"></script>
-    <script type="module" src="./src/pepper-main.tsx"></script>
+    <script type="module" src="./pepper.js"></script>
   </body>
 </html>`;
 }

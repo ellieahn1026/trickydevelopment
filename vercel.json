@@ -6,8 +6,17 @@
   "buildCommand": "bun run build:web",
   "cleanUrls": true,
   "trailingSlash": false,
+  "rewrites": [
+    {
+      "source": "/chat",
+      "destination": "/api/pepper-chat"
+    }
+  ],
   "functions": {
     "api/chat.ts": {
+      "maxDuration": 30
+    },
+    "api/pepper-chat.ts": {
       "maxDuration": 30
     }
   }
