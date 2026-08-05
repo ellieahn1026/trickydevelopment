@@ -1,11 +1,11 @@
 import {
   createInitialEmotionState,
   type EmotionState,
-} from "../models/emotion.ts";
+} from "../models/emotion";
 import {
   applyRandomEmotionVariation,
   applySpontaneousAnger,
-} from "../services/emotionEngine.ts";
+} from "../services/emotionEngine";
 
 export type MessageRole = "user" | "assistant" | "system";
 

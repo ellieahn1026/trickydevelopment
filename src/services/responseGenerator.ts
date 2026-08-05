@@ -1,10 +1,10 @@
 import {
   generateChatReply,
   parseStructuredChatAnswer,
-} from "../../lib/openai.ts";
-import type { EmotionState } from "../models/emotion.ts";
-import { buildCharacterPrompt } from "../prompts/characterPrompt.ts";
-import type { SessionMessage } from "../store/sessionStore.ts";
+} from "../../lib/openai";
+import type { EmotionState } from "../models/emotion";
+import { buildCharacterPrompt } from "../prompts/characterPrompt";
+import type { SessionMessage } from "../store/sessionStore";
 
 function getLatestUserMessage(messages: SessionMessage[]): string {
   for (let index = messages.length - 1; index >= 0; index -= 1) {

@@ -1,5 +1,5 @@
-import type { EmotionName, EmotionState } from "../models/emotion.ts";
-import type { EmotionState as UiEmotionState, Mood } from "../types/emotion.ts";
+import type { EmotionName, EmotionState } from "../models/emotion";
+import type { EmotionState as UiEmotionState, Mood } from "../types/emotion";
 
 export type ScheduledMoodLabel = "happy" | "groggy" | "angry";
 
@@ -86,7 +86,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function parseClockToMinutes(time: string): number {
-  const [hours, minutes] = time.split(":").map(Number);
+  const [hours = 0, minutes = 0] = time.split(":").map(Number);
   return hours * 60 + minutes;
 }
 

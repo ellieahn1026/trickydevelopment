@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { ANALYZER_PROMPT } from "../prompts/analyzerPrompt.ts";
-import { getOpenAIClient, getOpenAIModel } from "./openai.ts";
+import { ANALYZER_PROMPT } from "../prompts/analyzerPrompt";
+import { getOpenAIClient, getOpenAIModel } from "./openai";
 
 export const TriggerSchema = z.enum([
   "praise",

@@ -3,7 +3,7 @@ import { z } from "zod";
 import {
   buildInitialBackendEmotionState,
   type InitialEmotionOptions,
-} from "../lib/scheduledInitialEmotion.ts";
+} from "../lib/scheduledInitialEmotion";
 
 export const EmotionNameSchema = z.enum(["happy", "neutral", "sad", "angry"]);
 

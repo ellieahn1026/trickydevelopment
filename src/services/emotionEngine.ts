@@ -1,5 +1,5 @@
-import type { EmotionName, EmotionState } from "../models/emotion.ts";
-import type { EmotionAnalysis } from "./emotionAnalyzer.ts";
+import type { EmotionName, EmotionState } from "../models/emotion";
+import type { EmotionAnalysis } from "./emotionAnalyzer";
 
 export type EmotionSignal = EmotionAnalysis;
 

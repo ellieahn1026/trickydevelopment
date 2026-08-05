@@ -1,4 +1,4 @@
-import type { EmotionName, EmotionState } from "../models/emotion.ts";
+import type { EmotionName, EmotionState } from "../models/emotion";
 
 const SAFETY_RULES = `
 Safety rules (always follow):

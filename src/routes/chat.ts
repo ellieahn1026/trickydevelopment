@@ -1,17 +1,17 @@
 import { Router } from "express";
 import { z } from "zod";
 
-import { formatOpenAIError } from "../../lib/openai.ts";
-import { analyzeEmotion } from "../services/emotionAnalyzer.ts";
-import { updateEmotion } from "../services/emotionEngine.ts";
-import { generateResponse } from "../services/responseGenerator.ts";
+import { formatOpenAIError } from "../../lib/openai";
+import { analyzeEmotion } from "../services/emotionAnalyzer";
+import { updateEmotion } from "../services/emotionEngine";
+import { generateResponse } from "../services/responseGenerator";
 import {
   addMessage,
   createSession,
   getSession,
   setLastResponseId,
   updateEmotion as saveEmotionState,
-} from "../store/sessionStore.ts";
+} from "../store/sessionStore";
 
 const chatRequestSchema = z.object({
   sessionId: z.string().trim().min(1, "sessionId is required."),
