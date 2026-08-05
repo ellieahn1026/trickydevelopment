@@ -1,4 +1,4 @@
-import type { AgentState, ResponseMode, UserSignals } from "./state.ts";
+import type { AgentState, ResponseMode, UserSignals } from "./state";
 
 function formatScore(value: number): string {
   return value.toFixed(2);

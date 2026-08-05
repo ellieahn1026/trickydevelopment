@@ -190,7 +190,7 @@ export async function handlePotterChatStream(
 
   if (action === "silence") {
     return new ReadableStream({
-      start(controller) {
+      start(controller: ReadableStreamDefaultController<Uint8Array>) {
         controller.enqueue(formatSseEvent(turnEvent));
         controller.enqueue(
           formatSseEvent({
@@ -222,7 +222,7 @@ export async function handlePotterChatStream(
   const decoder = new TextDecoder();
 
   return new ReadableStream({
-    async start(controller) {
+    async start(controller: ReadableStreamDefaultController<Uint8Array>) {
       controller.enqueue(formatSseEvent(turnEvent));
 
       let buffer = "";

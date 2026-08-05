@@ -213,6 +213,7 @@ body.boot-complete .chat-panel {
 .boot-fake__composer-trigger {
   display: block;
   width: 100%;
+  max-width: 100%;
   margin: 0;
   padding: 0;
   border: none;
@@ -220,6 +221,7 @@ body.boot-complete .chat-panel {
   font: inherit;
   color: inherit;
   pointer-events: none;
+  box-sizing: border-box;
 }
 
 .boot-fake__composer-trigger:hover .boot-fake__composer,
@@ -245,8 +247,11 @@ body.boot-complete .chat-panel {
 
 .boot-fake__composer-wrap {
   pointer-events: auto;
+  flex: 0 0 auto;
+  align-self: center;
   width: var(--composer-w);
   max-width: var(--composer-w);
+  box-sizing: border-box;
 }
 
 .boot-fake__composer {

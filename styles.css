@@ -14,10 +14,10 @@
   --font-mono: "Xanh Mono", ui-monospace, monospace;
   --font-composer-input: var(--font-mono), "Arimo", sans-serif;
   --font-pretendard-tracking: -0.02em;
-  /* CSS zoom does not expand layout viewport like browser zoom — compensate explicitly. */
+  /* Layout px vars — values set by layout-engine.js (never calc from 100vw). */
   --layout-zoom: 0.8;
-  --lvw: calc(100vw / var(--layout-zoom));
-  --lvh: calc(100dvh / var(--layout-zoom));
+  --lvw: 100vw;
+  --lvh: 100vh;
 
   /* Figma-fixed chrome — never scale with viewport */
   --brand-left: 29px;
@@ -48,10 +48,9 @@
   /* Q/A max width = sideline → viewport right, minus gutters */
   --chat-bubble-max-w: 100%;
   --content-left: var(--archive-left);
-  --sideline-lane-width: calc(var(--lvw) - var(--sideline-left));
-  --sideline-lane-center-x: calc(var(--sideline-left) + var(--sideline-lane-width) / 2);
-  /* Composer max width = 80% of sideline → viewport right lane */
-  --composer-w: calc(var(--sideline-lane-width) * 0.8);
+  --sideline-lane-width: 100vw;
+  --sideline-lane-center-x: 50vw;
+  --composer-w: 80vw;
   --composer-bottom: 59px;
   --composer-z: 100;
   --composer-dock-h: calc(

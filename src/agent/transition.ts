@@ -1,4 +1,4 @@
-import type { AgentState, ProvocationLevel, UserSignals } from "./state.ts";
+import type { AgentState, ProvocationLevel, UserSignals } from "./state";
 
 const MAX_PROVOCATION = 3;
 const MIN_PROVOCATION = 1;

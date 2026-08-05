@@ -4,7 +4,7 @@ import {
   type ConversationHistoryEntry,
 } from "../lib/conversation";
 import { formatOpenAIError, generateChatReplyStream } from "../lib/openai";
-import { handleF1ChatStream, resolveAgentState } from "../src/index.ts";
+import { handleF1ChatStream, resolveAgentState } from "../src/index";
 
 async function pipeReadableStream(
   stream: ReadableStream<Uint8Array>,

@@ -9,8 +9,8 @@ import {
   type ConversationHistoryEntry,
 } from "./lib/conversation";
 import { formatOpenAIError, generateChatReplyStream } from "./lib/openai";
-import { handleF1ChatStream, resolveAgentState } from "./src/index.ts";
-import { processChatRequest } from "./src/routes/chat.ts";
+import { handleF1ChatStream, resolveAgentState } from "./src/index";
+import { processChatRequest } from "./src/routes/chat";
 
 const preferredPort = Number(process.env.PORT) || 3000;
 const maxPortAttempts = 10;

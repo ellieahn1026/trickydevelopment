@@ -5,23 +5,23 @@ import {
   detectHesitation,
   detectIncomplete,
   estimateInformation,
-} from "./agent/analyze.ts";
-import { buildInstructions } from "./agent/prompt.ts";
+} from "./agent/analyze";
+import { buildInstructions } from "./agent/prompt";
 import {
   determineResponseMode,
   getMaxOutputTokens,
-} from "./agent/responseMode.ts";
-import { generateF1Reply, generateF1ReplyStream } from "./agent/respond.ts";
+} from "./agent/responseMode";
+import { generateF1Reply, generateF1ReplyStream } from "./agent/respond";
 import {
   initialAgentState,
   type AgentState,
   type ResponseMode,
   type UserSignals,
-} from "./agent/state.ts";
-import { transition } from "./agent/transition.ts";
+} from "./agent/state";
+import { transition } from "./agent/transition";
 
-export type { AgentState, ResponseMode, UserSignals } from "./agent/state.ts";
-export type { F1RespondInput, F1RespondResult } from "./agent/respond.ts";
+export type { AgentState, ResponseMode, UserSignals } from "./agent/state";
+export type { F1RespondInput, F1RespondResult } from "./agent/respond";
 export { initialAgentState, transition };
 
 export type GenerateResponseResult = {
@@ -181,7 +181,7 @@ export async function handleF1ChatStream(
   const reader = upstream.body.getReader();
 
   return new ReadableStream({
-    async start(controller) {
+    async start(controller: ReadableStreamDefaultController<Uint8Array>) {
       controller.enqueue(formatSseEvent(turnEvent));
 
       try {

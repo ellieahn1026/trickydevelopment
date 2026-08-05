@@ -1,4 +1,4 @@
-import type { AgentState } from "./state.ts";
+import type { AgentState } from "./state";
 
 const HESITATION_PATTERNS: RegExp[] = [
   /음+\.{2,}|^음+\.?$/,

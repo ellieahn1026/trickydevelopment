@@ -1,4 +1,4 @@
-import type { ResponseMode, UserSignals } from "./state.ts";
+import type { ResponseMode, UserSignals } from "./state";
 
 /** 모드별 max_output_tokens 상한 (프롬프트가 길이를 주로 제어하고, 이 값은 ceiling 역할만 한다) */
 export const RESPONSE_MODE_MAX_OUTPUT_TOKENS: Record<ResponseMode, number> = {

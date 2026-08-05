@@ -10,9 +10,12 @@ import { isLowScore, scoreInput } from "./input-score.js";
 import { recordComposerCenter } from "./composer-trail.js";
 import { logInteraction } from "./interaction-log.js";
 import {
-  layoutRectSize,
-  layoutZoom,
+  clientToLayoutLocal,
+  elementLayoutSize,
+  refreshLayout,
   syncComposerWidth,
+  targetComposerWidthPx,
+  targetLaneWidthPx,
 } from "./composer-layout.js";
 
 const CURSOR_RADIUS = 58;
@@ -98,23 +101,19 @@ if (!composer || !input) {
     if (composer.parentElement === lane) return;
 
     const rect = composer.getBoundingClientRect();
-    const laneRect = lane.getBoundingClientRect();
-    const z = layoutZoom();
+    const clientX = rect.left;
+    const clientY = rect.top;
 
     lane.appendChild(composer);
 
-    posX = Math.max(0, (rect.left - laneRect.left) / z);
-    posY = Math.max(0, (rect.top - laneRect.top) / z);
+    const p = clientToLayoutLocal(lane, clientX, clientY);
+    posX = Math.max(0, p.x);
+    posY = Math.max(0, p.y);
   }
 
   function pointerToLane(clientX, clientY) {
     if (!composerLane) return { x: clientX, y: clientY };
-    const laneRect = composerLane.getBoundingClientRect();
-    const z = layoutZoom();
-    return {
-      x: (clientX - laneRect.left) / z,
-      y: (clientY - laneRect.top) / z,
-    };
+    return clientToLayoutLocal(composerLane, clientX, clientY);
   }
 
   function syncPointerLane(clientX, clientY) {
@@ -206,16 +205,15 @@ if (!composer || !input) {
   }
 
   function syncSize() {
-    const size = layoutRectSize(composer);
+    const size = elementLayoutSize(composer);
     sizeW = size.width;
     sizeH = size.height;
   }
 
   function getBounds() {
     syncSize();
-    const laneSize = layoutRectSize(composerLane);
-    const laneW = laneSize.width;
-    const laneH = laneSize.height;
+    const laneW = composerLane ? targetLaneWidthPx() : 0;
+    const laneH = composerLane ? elementLayoutSize(composerLane).height : 0;
 
     return {
       minX: 0,
@@ -238,6 +236,10 @@ if (!composer || !input) {
   function measureSize() {
     syncComposerWidth();
     syncSize();
+    const targetW = targetComposerWidthPx();
+    if (targetW > 0 && Math.abs(sizeW - targetW) > 1) {
+      sizeW = targetW;
+    }
   }
 
   function limitSpeed() {
@@ -790,6 +792,8 @@ if (!composer || !input) {
 
     composer.classList.add("chat-panel__composer--runaway");
     mountComposerInLane();
+    refreshLayout();
+    syncComposerWidth();
 
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
